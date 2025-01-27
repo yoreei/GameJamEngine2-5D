@@ -111,6 +111,9 @@
     <ClInclude Include="GJGlobals.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="stb_image.h">
+      <Filter>Header Files\includes</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dx2d.cpp">
@@ -150,6 +153,9 @@
       <Filter>Header Files\copyToOut</Filter>
     </CopyFileToFolders>
     <CopyFileToFolders Include="..\assets\explode.png">
+      <Filter>Header Files\copyToOut</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\assets\map1.txt">
       <Filter>Header Files\copyToOut</Filter>
     </CopyFileToFolders>
   </ItemGroup>

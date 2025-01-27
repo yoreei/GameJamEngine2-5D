@@ -4,10 +4,15 @@
 #include <stdexcept>
 #include <functional>
 #include <fstream>
+#include <numbers>
+
+#include <DirectXMath.h>
 
 #include "GJScene.h"
 #include "irrKlang.h"
 #include "GJGlobals.h"
+
+using namespace DirectX;
 
 using DeltaTime = std::chrono::duration<double>;
 class GJSimulation {
@@ -65,17 +70,19 @@ public:
 				return;
 			}
 
-			if (wParam == 'Q') {
-				castExplode(0);
+			static XMVECTOR leftRot = XMQuaternionRotationAxis({ 0.f, 0.f, -1.f, 0.f }, std::numbers::pi / 8);
+			static XMVECTOR rightRot = XMQuaternionRotationAxis({ 0.f, 0.f, -1.f, 0.f }, -std::numbers::pi / 8);
+			if (wParam == VK_LEFT) {
+				scene.lookAt = XMVector3Rotate(scene.lookAt, leftRot);
 			}
-			else if (wParam == 'W') {
-				castExplode(1);
+			else if (wParam == VK_RIGHT) {
+				scene.lookAt = XMVector3Rotate(scene.lookAt, rightRot);
 			}
-			else if (wParam == 'S') {
-				castExplode(2);
+			else if (wParam == VK_UP) {
+				scene.position = scene.position + scene.lookAt;
 			}
-			else if (wParam == 'A') {
-				castExplode(3);
+			else if (wParam == VK_DOWN) {
+				scene.position = scene.position - scene.lookAt;
 			}
 			else if (wParam == VK_SPACE) {
 				castQLeap();
@@ -310,59 +317,59 @@ public:
 	}
 
 	void tickMovement(std::chrono::duration<double, std::milli> delta) {
-		if (!scene.qLeapActive) {
-			for (int i = 0; i < scene.entities.size(); ++i) {
-				Entity& e = scene.entities[i];
-				if (e.health <= 0) {
-					continue;
-				}
-				e.moveBy(e.momentum * globalSpeedUp);
+		//if (!scene.qLeapActive) {
+		//	for (int i = 0; i < scene.entities.size(); ++i) {
+		//		Entity& e = scene.entities[i];
+		//		if (e.health <= 0) {
+		//			continue;
+		//		}
+		//		e.moveBy(e.momentum * globalSpeedUp);
 
-				reflectEntity(e);
-			}
-		}
-		for (int i = 0; i < scene.obstacles.size(); ++i) {
-			Entity& e = scene.obstacles[i];
-			if (e.health <= 0) {
-				continue;
-			}
-			e.moveBy(e.momentum * globalSpeedUp);
+		//		reflectEntity(e);
+		//	}
+		//}
+		//for (int i = 0; i < scene.obstacles.size(); ++i) {
+		//	Entity& e = scene.obstacles[i];
+		//	if (e.health <= 0) {
+		//		continue;
+		//	}
+		//	e.moveBy(e.momentum * globalSpeedUp);
 
-			wrapAround(e, 15.f);
+		//	wrapAround(e, 15.f);
 
-		}
+		//}
 	}
 
 	void tickCollision(std::chrono::duration<double, std::milli> delta) {
-		for (int i = 0; i < scene.obstacles.size(); ++i) {
-			Entity& o1 = scene.obstacles[i];
-			if (o1.health <= 0) {
-				continue;
-			}
-			for (int j = i + 1; j < scene.obstacles.size(); ++j) {
-				Entity& o2 = scene.obstacles[j];
-				if (o2.health <= 0) {
-					continue;
-				}
-				if (isCollision(o1, o2)) {
-					ricochet(o1, o2);
-				}
+		//for (int i = 0; i < scene.obstacles.size(); ++i) {
+		//	Entity& o1 = scene.obstacles[i];
+		//	if (o1.health <= 0) {
+		//		continue;
+		//	}
+		//	for (int j = i + 1; j < scene.obstacles.size(); ++j) {
+		//		Entity& o2 = scene.obstacles[j];
+		//		if (o2.health <= 0) {
+		//			continue;
+		//		}
+		//		if (isCollision(o1, o2)) {
+		//			ricochet(o1, o2);
+		//		}
 
-			}
+		//	}
 
-			if (!scene.qLeapActive) {
-				for (int j = 0; j < scene.entities.size(); ++j) {
-					Entity& e = scene.entities[j];
-					if (e.health <= 0) {
-						continue;
-					}
-					if (isCollision(o1, e, cheatFactor)) {
-						killEntity(j);
-					}
-				}
-			}
+		//	if (!scene.qLeapActive) {
+		//		for (int j = 0; j < scene.entities.size(); ++j) {
+		//			Entity& e = scene.entities[j];
+		//			if (e.health <= 0) {
+		//				continue;
+		//			}
+		//			if (isCollision(o1, e, cheatFactor)) {
+		//				killEntity(j);
+		//			}
+		//		}
+		//	}
 
-		}
+		//}
 	}
 
 	void ricochet(Entity& o1, Entity& o2) {
@@ -409,13 +416,13 @@ public:
 	void loadNewGame() {
 
 		eventQueue = {
-			{ DeltaTime{60.f}, [this]() { this->event6(); } },
-			{ DeltaTime{38.f}, [this]() { this->event5(); } },
-			{ DeltaTime{26.f}, [this]() { this->event4(); } },
-			{ DeltaTime{18.f}, [this]() { this->event3(); } },
-			{ DeltaTime{12.f}, [this]() { this->event2(); } },
-			{ DeltaTime{6.f}, [this]() { this->event1(); } },
-			{ DeltaTime{0.f}, [this]() { this->event0(); } },
+			// { DeltaTime{60.f}, [this]() { this->event6(); } },
+			//{ DeltaTime{38.f}, [this]() { this->event5(); } },
+			//{ DeltaTime{26.f}, [this]() { this->event4(); } },
+			//{ DeltaTime{18.f}, [this]() { this->event3(); } },
+			//{ DeltaTime{12.f}, [this]() { this->event2(); } },
+			//{ DeltaTime{6.f}, [this]() { this->event1(); } },
+			//{ DeltaTime{0.f}, [this]() { this->event0(); } },
 		};
 
 		scene = GJScene();
@@ -423,7 +430,6 @@ public:
 		scene.resetObstacles();
 		GGameStart = getTime();
 		scene.points = 100;
-		float globalSizeFactor = 0.f;
 		enterINGAME();
 	}
 

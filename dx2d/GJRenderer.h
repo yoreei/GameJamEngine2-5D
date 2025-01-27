@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <format>
 
+#include <DirectXMath.h>
+#include <DirectXCollision.h>
 #include <windows.h>
 #include <d2d1.h>
 #include <d2d1helper.h>
@@ -16,6 +18,9 @@
 using Microsoft::WRL::ComPtr;
 
 #include "GJScene.h"
+
+inline int SCR_WIDTH = 360;
+inline float SCR_WIDTH_F = 360;
 
 enum class TextFormat {
 	HEADING = 0,
@@ -81,6 +86,12 @@ public:
 		}
 
 		// Create a solid color brush
+		hr = pRenderTarget->CreateSolidColorBrush(
+			D2D1::ColorF(D2D1::ColorF(0.1f, 0.1f, 0.1f)),
+			&brush
+		);
+		checkFailed(hr, hWnd, "createSolidColorBrush failed");
+
 		hr = pRenderTarget->CreateSolidColorBrush(
 			D2D1::ColorF(D2D1::ColorF(0.1f, 0.1f, 0.1f)),
 			&brushes["black"]
@@ -260,7 +271,7 @@ public:
 		pRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::Black));
 		pLowResRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::Black, 0.f));
 
-		drawBorder();
+		//drawBorder();
 		(this->*drawCallTable[static_cast<size_t>(scene->state)])();
 
 		// draw low res rt to main rt
@@ -333,38 +344,125 @@ public:
 		);
 
 	}
+	void drawMinimap() {
+		//draw minimap
+		int size = 2;
+		float minimapAlpha = 0.7;
+		D2D1_RECT_F pos = D2D1::RectF(0, 0, 0, 0);
+		for (int y = 0; y < scene->height; ++y) {
+			pos.top = y * size;
+			pos.bottom = pos.top + size;
+			for (int x = 0; x < scene->width; ++x) {
+				const char& tile = scene->get(x, y);
+				if (tile == '#') {
+					//brush->SetColor(D2D1_COLOR_F{});
+					brush->SetColor(D2D1::ColorF(0.2f, 0.2f, 0.2f, minimapAlpha));
+				}
+				else if (tile == ' ') {
+					brush->SetColor(D2D1::ColorF{ 1.f, 1.f, 1.f, minimapAlpha });
+				}
+				else {
+					throw std::runtime_error("");
+				}
+				pos.left = x * size;
+				pos.right = pos.left + size;
 
-	void drawScene() {
+				pLowResRenderTarget->FillRectangle(pos, brush);
 
-		// draw entities
-		if (!scene->qLeapActive) {
-			for (const Entity& e : scene->entities) {
-				if (e.health <= 0) {
-					continue;
+			}
+		}
+
+		// draw entities on minimap
+		XMVECTOR posV = size * XMVectorFloor(scene->position);
+		const float pos_x = XMVectorGetX(posV);
+		const float pos_y = XMVectorGetY(posV);
+		pos = D2D1::RectF(pos_x, pos_y, pos_x + size, pos_y + size);
+		brush->SetColor(D2D1::ColorF{ 1.f, 0.7f, 0.7f, minimapAlpha });
+		pLowResRenderTarget->FillRectangle(pos, brush);
+
+		//v Draw LOS
+		brush->SetColor(D2D1::ColorF{ 1.f, 1.f, 0.7, minimapAlpha });
+		XMVECTOR endV = posV + scene->lookAt * 20;
+		const float end_x = XMVectorGetX(endV);
+		const float end_y = XMVectorGetY(endV);
+		pLowResRenderTarget->DrawLine(
+			D2D1_POINT_2F(pos_x, pos_y),
+			D2D1_POINT_2F(end_x, end_y),
+			brush, 1.f);
+
+	}
+	float intersect(const XMVECTOR& origin, const XMVECTOR& dir) {
+		BoundingBox b{ XMFLOAT3{0,0,0}, XMFLOAT3{0.5,0.5,0} };
+		float dist = FLT_MAX;
+		float bestDist = FLT_MAX;
+
+		for (int y = 0; y < scene->height; ++y) {
+			for (int x = 0; x < scene->width; ++x) {
+				if (scene->get(x, y) != '#') { continue; }
+				b.Center = XMFLOAT3{ static_cast<float>(x) + 0.5f,static_cast<float>(y) + 0.5f,0 };
+				bool intersects = b.Intersects(origin, dir, OUT dist);
+				if (intersects) {
+					bestDist = std::min(bestDist, dist);
 				}
 
-				vec3 pos = e.getPos();
-				D2D1_RECT_F unitSquare = D2D1::RectF(
-					e.getPos().e[0], pos.e[1],
-					e.getPos().e[0] + e.size, pos.e[1] + e.size
-				);
-				pLowResRenderTarget->DrawRectangle(unitSquare, brushes["green"], 2.f);
 			}
-		}
-		// draw obstacles
-		for (const Entity& o : scene->obstacles) {
-			if (o.health <= 0) {
-				continue;
-			}
-			vec3 pos = o.getPos();
-			D2D1_ELLIPSE ellipse = D2D1::Ellipse(
-				D2D1::Point2F(pos.x(), pos.y()), // Center point (x, y)
-				o.size,                         // Radius X
-				o.size                          // Radius Y
-			);
-			pLowResRenderTarget->FillEllipse(ellipse, brushes["blue"]);
 
 		}
+		return bestDist;
+	}
+
+	void getPixelDir(int x, OUT XMVECTOR& out) {
+		float ratio = std::tan(scene->fov / 2.f);
+		float hWidth = SCR_WIDTH_F / 2.f;
+		float imgPlaneDist = hWidth / ratio;
+		out = { imgPlaneDist, static_cast<float>(x) - SCR_WIDTH_F / 2.f, 0.f, 0.f };
+		out = XMVector3Normalize(out);
+		XMVECTOR worldFromScreen = XMQuaternionRotationAxis({ 0,0,1,0 }, std::atan2f(XMVectorGetY(scene->lookAt), XMVectorGetX(scene->lookAt)));
+		out = XMVector3Rotate(out, worldFromScreen);
+	}
+
+	void drawScene() {
+		float dist;
+		XMVECTOR dir;
+		for (int x = 0; x < SCR_WIDTH; ++x) {
+			getPixelDir(x, OUT dir);
+			dist = intersect(scene->position, dir);
+			float MAXVIEWDIST = 30.f;
+			float color = -(dist / MAXVIEWDIST) + 1.f;
+			brush->SetColor(D2D1::ColorF(color, color, color));
+			pLowResRenderTarget->DrawLine(D2D1_POINT_2F(static_cast<float>(x), 0), D2D1_POINT_2F(static_cast<float>(x), 360), brush, 1.f);
+
+		}
+
+		//// draw entities
+		//if (!scene->qLeapActive) {
+		//	for (const Entity& e : scene->entities) {
+		//		if (e.health <= 0) {
+		//			continue;
+		//		}
+
+		//		vec3 pos = e.getPos();
+		//		D2D1_RECT_F unitSquare = D2D1::RectF(
+		//			e.getPos().e[0], pos.e[1],
+		//			e.getPos().e[0] + e.size, pos.e[1] + e.size
+		//		);
+		//		pLowResRenderTarget->DrawRectangle(unitSquare, brushes["green"], 2.f);
+		//	}
+		//}
+		//// draw obstacles
+		//for (const Entity& o : scene->obstacles) {
+		//	if (o.health <= 0) {
+		//		continue;
+		//	}
+		//	vec3 pos = o.getPos();
+		//	D2D1_ELLIPSE ellipse = D2D1::Ellipse(
+		//		D2D1::Point2F(pos.x(), pos.y()), // Center point (x, y)
+		//		o.size,                         // Radius X
+		//		o.size                          // Radius Y
+		//	);
+		//	pLowResRenderTarget->FillEllipse(ellipse, brushes["blue"]);
+
+		//}
 	}
 
 	void loadImage(const std::wstring& filePath, EBitmap eBitmap) {
@@ -443,6 +541,7 @@ public:
 				nullptr // Source rectangle (nullptr to use entire bitmap)
 			);
 		}
+		drawMinimap();
 
 	}
 
@@ -528,7 +627,7 @@ public:
 	}
 
 private:
-	void checkFailed(HRESULT hr, HWND hwnd, const std::string& message ) {
+	void checkFailed(HRESULT hr, HWND hwnd, const std::string& message) {
 		if (FAILED(hr))
 		{
 			MessageBoxA(NULL, message.c_str(), "Error", MB_OK);
@@ -552,6 +651,7 @@ private:
 		{"green", nullptr },
 		{"amber", nullptr },
 		{"blue", nullptr } };
+	ID2D1SolidColorBrush* brush = nullptr; //< multi-purpose brush to be used with .SetColor();
 	std::array<IDWriteTextFormat*, static_cast<size_t>(TextFormat::size)> textFormats;
 	using DrawFunction = void(GJRenderer::*)();
 	std::array<DrawFunction, static_cast<size_t>(State::size)> drawCallTable;

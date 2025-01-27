@@ -4,13 +4,16 @@
 #include <memory>
 #include <bitset>
 #include <random>
+#include <fstream>
+#include <cmath>
+#include <numbers>
+
+#include <DirectXMath.h>
 
 #include "Animation.h"
 #include "3d/common3d.h"
 
-
-
-
+using namespace DirectX;
 
 enum class EntityType {
 	PlayerEntity1 = 0,
@@ -87,6 +90,34 @@ enum class State {
 };
 struct GJScene {
 	GJScene() {
+		loadMap(mapFile);
+	}
+	void loadMap(const std::string& fileName) {
+		std::string line;
+		std::stringstream ss;
+		std::ifstream f;
+		f.open(fileName);
+		if (!f.is_open()) {
+			throw std::runtime_error("");
+		}
+		width = height = 0;
+		while (f.peek() != EOF) {
+			++height;
+			getline(f, line);
+			size_t findPlayer = line.find('@');
+			if (findPlayer != std::string::npos) {
+				position = XMVECTOR{ static_cast<float>(findPlayer) + 0.5f, static_cast<float>(height) + 0.5f, 0, 0 };
+				line[findPlayer] = ' ';
+			}
+			width = std::max(width, line.size());
+			ss << line;
+		}
+		map = ss.str();
+	}
+
+
+	const char& get(size_t x, size_t y) const {
+		return map[y * width + x];
 	}
 
 	void resetEntities() {
@@ -109,6 +140,15 @@ struct GJScene {
 
 	//std::array<int, 255> keybinds;
 	//Entity playerController;
+	XMVECTOR lookAt{ 1,0,0,0 };
+	XMVECTOR position{ 0,0,0,0 };
+	float fov = 1.22f; //70deg
+	//XMVECTOR viewAngleQuatL = XMQuaternionRotationAxis({0,0,1,0}, std::numbers::pi / 5);
+	//XMVECTOR viewAngleQuatR = XMQuaternionInverse(viewAngleQuatL);
+	std::string map;
+	uint64_t width = 0;
+	uint64_t height = 0;
+	std::string mapFile = "assets/map1.txt";
 	State state = State::MAINMENU;
 	bool explodeCd = false;
 	bool qLeapCd = false;
