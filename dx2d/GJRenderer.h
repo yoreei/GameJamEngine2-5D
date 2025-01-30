@@ -21,6 +21,8 @@ using Microsoft::WRL::ComPtr;
 
 inline int SCR_WIDTH = 360;
 inline float SCR_WIDTH_F = 360;
+inline float HSCR_F = SCR_WIDTH_F / 2.f;
+inline int HSCR = SCR_WIDTH / 2;
 
 enum class TextFormat {
 	HEADING = 0,
@@ -37,9 +39,9 @@ enum EBitmap {
 class GJRenderer {
 public:
 	void init(HWND _hWnd, const GJScene* _scene) {
-
-		hWnd = _hWnd;
 		scene = _scene;
+		hWnd = _hWnd;
+		updateImgPlaneDist();
 
 		// Create WIC Factory
 		HRESULT hr = CoCreateInstance(
@@ -229,6 +231,8 @@ public:
 		releaseResources();
 	}
 
+
+
 	void releaseResources() {
 		for (auto& pair : brushes) {
 			auto& pBrush = std::get<ID2D1SolidColorBrush*>(pair);
@@ -253,6 +257,11 @@ public:
 
 		}
 
+	}
+
+	void updateImgPlaneDist() {
+		float ratio = std::tan(scene->fov / 2.f);
+		imgPlaneDist = HSCR_F / ratio;
 	}
 
 	void wmResize(HWND hwnd) {
@@ -411,77 +420,32 @@ public:
 		return bestDist;
 	}
 
-	void getPixelDir(int x, OUT XMVECTOR& origin, OUT XMVECTOR& dir, OUT float& wallCorrection) {
-		float ratio = std::tan(scene->fov / 2.f);
-		float hWidth = SCR_WIDTH_F / 2.f;
-		float imgPlaneDist = hWidth / ratio;
-		dir = { imgPlaneDist, static_cast<float>(x) - SCR_WIDTH_F / 2.f, 0.f, 0.f };
+	/* output: perspective correction coefficient */
+	float getPixelDir(int x, OUT XMVECTOR& dir) {
+		dir = { imgPlaneDist, static_cast<float>(x) - HSCR_F, 0.f, 0.f };
 		dir = XMVector3Normalize(dir);
 		float screenSpaceAngle = std::atan2f(XMVectorGetY(dir), XMVectorGetX(dir));
 		float angle = std::atan2f(XMVectorGetY(scene->getDir()), XMVectorGetX(scene->getDir()));
 		XMVECTOR worldFromScreen = XMQuaternionRotationAxis({ 0,0,1,0 }, angle);
 		dir = XMVector3Rotate(dir, worldFromScreen);
 
-		//x -= SCR_WIDTH / 2;
-		//XMVECTOR correction = scene->getLeft() * - 1.f * (x/(SCR_WIDTH / 2.f));
-		//origin = scene->position + correction;
-		origin = scene->position;
-
-		//wallCorrection = cos(rayAngle - scene->getDir());
-		wallCorrection = std::abs(cos(screenSpaceAngle));
-
+		return std::abs(cos(screenSpaceAngle));
 	}
 
 	void drawScene() {
 		float dist;
-		XMVECTOR origin;
 		XMVECTOR dir;
-		float wallCorrection;
 		for (int x = 0; x < SCR_WIDTH; ++x) {
-			getPixelDir(x, OUT origin, OUT dir, OUT wallCorrection);
-			//wallCorrection = cos(scene->fov / 2.f) * (2.f * std::abs(x - SCR_WIDTH / 2.f) / SCR_WIDTH);
-			dist = intersect(origin, dir);
-			float MAXVIEWDIST = 100.f;
+			float fixPersp = getPixelDir(x, OUT dir);
+			dist = intersect(scene->position, dir);
 			float color = -(dist / MAXVIEWDIST) + 1.f;
 			brush->SetColor(D2D1::ColorF(color, color, color));
 			dist = std::clamp(dist, 0.f, MAXVIEWDIST);
-			//float lineH = std::sqrt(SCR_WIDTH_F / dist + 2) * 10;
-			float lineH = SCR_WIDTH_F / (dist * wallCorrection);
-			//float lineH = ((MAXVIEWDIST - dist) / MAXVIEWDIST) * SCR_WIDTH_F;
-			float midLine = SCR_WIDTH_F/2.f;
+			float lineH = SCR_WIDTH_F / (dist * fixPersp);
+			float midLine = SCR_WIDTH_F / 2.f;
 			pLowResRenderTarget->DrawLine(D2D1_POINT_2F(static_cast<float>(x), midLine + lineH), D2D1_POINT_2F(static_cast<float>(x), midLine - lineH), brush, 1.f);
 
 		}
-
-		//// draw entities
-		//if (!scene->qLeapActive) {
-		//	for (const Entity& e : scene->entities) {
-		//		if (e.health <= 0) {
-		//			continue;
-		//		}
-
-		//		vec3 pos = e.getPos();
-		//		D2D1_RECT_F unitSquare = D2D1::RectF(
-		//			e.getPos().e[0], pos.e[1],
-		//			e.getPos().e[0] + e.size, pos.e[1] + e.size
-		//		);
-		//		pLowResRenderTarget->DrawRectangle(unitSquare, brushes["green"], 2.f);
-		//	}
-		//}
-		//// draw obstacles
-		//for (const Entity& o : scene->obstacles) {
-		//	if (o.health <= 0) {
-		//		continue;
-		//	}
-		//	vec3 pos = o.getPos();
-		//	D2D1_ELLIPSE ellipse = D2D1::Ellipse(
-		//		D2D1::Point2F(pos.x(), pos.y()), // Center point (x, y)
-		//		o.size,                         // Radius X
-		//		o.size                          // Radius Y
-		//	);
-		//	pLowResRenderTarget->FillEllipse(ellipse, brushes["blue"]);
-
-		//}
 	}
 
 	void loadImage(const std::wstring& filePath, EBitmap eBitmap) {
@@ -676,5 +640,7 @@ private:
 	std::array<DrawFunction, static_cast<size_t>(State::size)> drawCallTable;
 
 	std::array<ComPtr<ID2D1Bitmap>, EBitmap::size> bitmaps;
+	float imgPlaneDist;
+	float MAXVIEWDIST = 90.f;
 };
 
