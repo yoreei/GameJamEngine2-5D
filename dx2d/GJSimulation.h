@@ -36,11 +36,11 @@ public:
 			MessageBox(NULL, L"Could not initialize audio engine.", L"Error", MB_OK);
 		}
 
-		audioEngine->stopAllSounds();
-		auto music = audioEngine->play2D("assets/ingame.mp3", true, false, true);
-		if (!music) {
-			MessageBox(NULL, L"Could not play ingame.mp3", L"Error", MB_OK);
-		}
+		//audioEngine->stopAllSounds();
+		//auto music = audioEngine->play2D("assets/ingame.mp3", true, false, true);
+		//if (!music) {
+		//	MessageBox(NULL, L"Could not play ingame.mp3", L"Error", MB_OK);
+		//}
 		enterMAINMENU();
 	}
 
@@ -73,16 +73,16 @@ public:
 			static XMVECTOR leftRot = XMQuaternionRotationAxis({ 0.f, 0.f, -1.f, 0.f }, std::numbers::pi / 8);
 			static XMVECTOR rightRot = XMQuaternionRotationAxis({ 0.f, 0.f, -1.f, 0.f }, -std::numbers::pi / 8);
 			if (wParam == VK_LEFT) {
-				scene.lookAt = XMVector3Rotate(scene.lookAt, leftRot);
+				scene.setDir(XMVector3Rotate(scene.getDir(), leftRot));
 			}
 			else if (wParam == VK_RIGHT) {
-				scene.lookAt = XMVector3Rotate(scene.lookAt, rightRot);
+				scene.setDir(XMVector3Rotate(scene.getDir(), rightRot));
 			}
 			else if (wParam == VK_UP) {
-				scene.position = scene.position + scene.lookAt;
+				scene.position = scene.position + scene.getDir();
 			}
 			else if (wParam == VK_DOWN) {
-				scene.position = scene.position - scene.lookAt;
+				scene.position = scene.position - scene.getDir();
 			}
 			else if (wParam == VK_SPACE) {
 				castQLeap();

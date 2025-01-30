@@ -91,6 +91,7 @@ enum class State {
 struct GJScene {
 	GJScene() {
 		loadMap(mapFile);
+		setDir({ 0,-1,0,0 });
 	}
 	void loadMap(const std::string& fileName) {
 		std::string line;
@@ -140,9 +141,8 @@ struct GJScene {
 
 	//std::array<int, 255> keybinds;
 	//Entity playerController;
-	XMVECTOR lookAt{ 1,0,0,0 };
-	XMVECTOR position{ 0,0,0,0 };
-	float fov = 1.22f; //70deg
+	//float fov = 1.22f; //70deg
+	float fov = 1.f; //70deg
 	//XMVECTOR viewAngleQuatL = XMQuaternionRotationAxis({0,0,1,0}, std::numbers::pi / 5);
 	//XMVECTOR viewAngleQuatR = XMQuaternionInverse(viewAngleQuatL);
 	std::string map;
@@ -159,4 +159,19 @@ struct GJScene {
 	std::array<Entity, 4> entities{};
 	std::array<Entity, 25> obstacles{};
 	static inline Entity emptyEntity;
+	XMVECTOR position{ 0,0,0,0 };
+	const XMVECTOR& getDir() const {
+		return dir;
+	}
+	const XMVECTOR& getLeft() const {
+		return left;
+	}
+	void setDir(const XMVECTOR& newDir) {
+		dir = newDir;
+		left = XMVector3Cross(dir, { 0.f,0.f,1.f,0.f });
+	}
+
+private:
+	XMVECTOR dir;
+	XMVECTOR left;
 };

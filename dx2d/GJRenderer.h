@@ -382,7 +382,7 @@ public:
 
 		//v Draw LOS
 		brush->SetColor(D2D1::ColorF{ 1.f, 1.f, 0.7, minimapAlpha });
-		XMVECTOR endV = posV + scene->lookAt * 20;
+		XMVECTOR endV = posV + scene->getDir() * 20;
 		const float end_x = XMVectorGetX(endV);
 		const float end_y = XMVectorGetY(endV);
 		pLowResRenderTarget->DrawLine(
@@ -411,26 +411,45 @@ public:
 		return bestDist;
 	}
 
-	void getPixelDir(int x, OUT XMVECTOR& out) {
+	void getPixelDir(int x, OUT XMVECTOR& origin, OUT XMVECTOR& dir, OUT float& wallCorrection) {
 		float ratio = std::tan(scene->fov / 2.f);
 		float hWidth = SCR_WIDTH_F / 2.f;
 		float imgPlaneDist = hWidth / ratio;
-		out = { imgPlaneDist, static_cast<float>(x) - SCR_WIDTH_F / 2.f, 0.f, 0.f };
-		out = XMVector3Normalize(out);
-		XMVECTOR worldFromScreen = XMQuaternionRotationAxis({ 0,0,1,0 }, std::atan2f(XMVectorGetY(scene->lookAt), XMVectorGetX(scene->lookAt)));
-		out = XMVector3Rotate(out, worldFromScreen);
+		dir = { imgPlaneDist, static_cast<float>(x) - SCR_WIDTH_F / 2.f, 0.f, 0.f };
+		dir = XMVector3Normalize(dir);
+		float screenSpaceAngle = std::atan2f(XMVectorGetY(dir), XMVectorGetX(dir));
+		float angle = std::atan2f(XMVectorGetY(scene->getDir()), XMVectorGetX(scene->getDir()));
+		XMVECTOR worldFromScreen = XMQuaternionRotationAxis({ 0,0,1,0 }, angle);
+		dir = XMVector3Rotate(dir, worldFromScreen);
+
+		//x -= SCR_WIDTH / 2;
+		//XMVECTOR correction = scene->getLeft() * - 1.f * (x/(SCR_WIDTH / 2.f));
+		//origin = scene->position + correction;
+		origin = scene->position;
+
+		//wallCorrection = cos(rayAngle - scene->getDir());
+		wallCorrection = std::abs(cos(screenSpaceAngle));
+
 	}
 
 	void drawScene() {
 		float dist;
+		XMVECTOR origin;
 		XMVECTOR dir;
+		float wallCorrection;
 		for (int x = 0; x < SCR_WIDTH; ++x) {
-			getPixelDir(x, OUT dir);
-			dist = intersect(scene->position, dir);
-			float MAXVIEWDIST = 30.f;
+			getPixelDir(x, OUT origin, OUT dir, OUT wallCorrection);
+			//wallCorrection = cos(scene->fov / 2.f) * (2.f * std::abs(x - SCR_WIDTH / 2.f) / SCR_WIDTH);
+			dist = intersect(origin, dir);
+			float MAXVIEWDIST = 100.f;
 			float color = -(dist / MAXVIEWDIST) + 1.f;
 			brush->SetColor(D2D1::ColorF(color, color, color));
-			pLowResRenderTarget->DrawLine(D2D1_POINT_2F(static_cast<float>(x), 0), D2D1_POINT_2F(static_cast<float>(x), 360), brush, 1.f);
+			dist = std::clamp(dist, 0.f, MAXVIEWDIST);
+			//float lineH = std::sqrt(SCR_WIDTH_F / dist + 2) * 10;
+			float lineH = SCR_WIDTH_F / (dist * wallCorrection);
+			//float lineH = ((MAXVIEWDIST - dist) / MAXVIEWDIST) * SCR_WIDTH_F;
+			float midLine = SCR_WIDTH_F/2.f;
+			pLowResRenderTarget->DrawLine(D2D1_POINT_2F(static_cast<float>(x), midLine + lineH), D2D1_POINT_2F(static_cast<float>(x), midLine - lineH), brush, 1.f);
 
 		}
 
