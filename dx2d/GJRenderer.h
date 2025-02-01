@@ -19,23 +19,41 @@ using Microsoft::WRL::ComPtr;
 
 #include "GJScene.h"
 
-inline int SCR_WIDTH = 360;
-inline float SCR_WIDTH_F = 360;
+inline int SCR_WIDTH = 960;
+inline float SCR_WIDTH_F = 960;
 inline float HSCR_F = SCR_WIDTH_F / 2.f;
 inline int HSCR = SCR_WIDTH / 2;
 
+
+constexpr size_t toId(auto someEnum) {
+	return static_cast<size_t>(someEnum);
+}
 enum class TextFormat {
 	HEADING = 0,
 	NORMAL,
 	SMALL,
 	size
 };
-enum EBitmap {
+enum class EGPUBitmap : size_t {
 	QLeap = 0,
 	Explode,
 	size
 };
 
+enum class ECPUBitmap : size_t {
+	Floor = 0,
+	size
+};
+
+struct CPUBitmap {
+	size_t width;
+	size_t height;
+	uint8_t channels;
+	std::vector<uint8_t> data;
+	size_t getPixel(size_t x, size_t y) {
+		return (y * width + x) * channels;
+	}
+};
 class GJRenderer {
 public:
 	void init(HWND _hWnd, const GJScene* _scene) {
@@ -72,7 +90,7 @@ public:
 
 		// Create a compatible render target for low-res drawing
 		hr = pRenderTarget->CreateCompatibleRenderTarget(
-			D2D1::SizeF(360.0f, 360.0f),
+			D2D1::SizeF(SCR_WIDTH_F, SCR_WIDTH_F),
 			&pLowResRenderTarget
 		);
 		checkFailed(hr, hWnd, "createCompatibleRenderTarget failed");
@@ -81,9 +99,10 @@ public:
 		pLowResRenderTarget->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
 		pRenderTarget->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
 
-		loadImage(L"assets/qLeap.png", EBitmap::QLeap);
-		loadImage(L"assets/explode.png", EBitmap::Explode);
-		if (EBitmap::size != 2) {
+		loadGPUBitmap(L"assets/qLeap.png", EGPUBitmap::QLeap);
+		loadGPUBitmap(L"assets/explode.png", EGPUBitmap::Explode);
+		initFloor(L"assets/textures/4.png");
+		if (toId(EGPUBitmap::size) != 2) {
 			MessageBox(NULL, L"update bitmaps!", L"Error", MB_OK);
 		}
 
@@ -198,13 +217,13 @@ public:
 		int screenWidth = GetSystemMetrics(SM_CXSCREEN);
 		int screenHeight = GetSystemMetrics(SM_CYSCREEN);
 
-		float scaleF = static_cast<float>(screenHeight) / 360.f;
+		float scaleF = static_cast<float>(screenHeight) / SCR_WIDTH_F;
 		D2D1::Matrix3x2F scale = D2D1::Matrix3x2F::Scale(
 			scaleF, scaleF,
 			D2D1::Point2F(0.f, 0.f)
 		);
 
-		float offsetF = (screenWidth - scaleF * 360.f) / 2.f;
+		float offsetF = (screenWidth - scaleF * SCR_WIDTH_F) / 2.f;
 		D2D1::Matrix3x2F translation = D2D1::Matrix3x2F::Translation(
 			offsetF, // X offset
 			0.f  // Y offset
@@ -230,8 +249,6 @@ public:
 	~GJRenderer() {
 		releaseResources();
 	}
-
-
 
 	void releaseResources() {
 		for (auto& pair : brushes) {
@@ -259,20 +276,6 @@ public:
 
 	}
 
-	void updateImgPlaneDist() {
-		float ratio = std::tan(scene->fov / 2.f);
-		imgPlaneDist = HSCR_F / ratio;
-	}
-
-	void wmResize(HWND hwnd) {
-		if (pRenderTarget)
-		{
-			RECT rc;
-			GetClientRect(hwnd, &rc);
-			pRenderTarget->Resize(D2D1::SizeU(rc.right - rc.left, rc.bottom - rc.top));
-		}
-	}
-
 	void draw(std::chrono::duration<double, std::milli> delta) {
 		pRenderTarget->BeginDraw();
 		pLowResRenderTarget->BeginDraw();
@@ -293,8 +296,8 @@ public:
 		D2D1_RECT_F destRect = D2D1::RectF(
 			0.0f,                         // Left
 			0.0f,                         // Top
-			360.f,  // Right
-			360.f  // Bottom
+			SCR_WIDTH_F,  // Right
+			SCR_WIDTH_F  // Bottom
 		);
 		pRenderTarget->DrawBitmap(
 			pLowResBitmap,                                    // The bitmap to draw
@@ -318,24 +321,29 @@ public:
 		drawScene();
 		drawUI();
 	}
+
 	void drawPREGAME() {
 		drawInstructions();
 		drawUI();
 	}
+
 	void drawMAINMENU() {
 		drawScene();
 		drawMenu("Main Menu");
 	}
+
 	void drawLOSS() {
 		drawScene();
 		drawEnd(L"Loss");
 		drawUI();
 	}
+
 	void drawWIN() {
 		drawScene();
 		drawEnd(L"New"); //> i.e. "New HiScore" will be written
 		drawUI();
 	}
+
 	void drawPAUSED() {
 		drawScene();
 		drawPaused();
@@ -353,6 +361,7 @@ public:
 		);
 
 	}
+
 	void drawMinimap() {
 		//draw minimap
 		int size = 2;
@@ -400,39 +409,20 @@ public:
 			brush, 1.f);
 
 	}
-	float intersect(const XMVECTOR& origin, const XMVECTOR& dir) {
-		BoundingBox b{ XMFLOAT3{0,0,0}, XMFLOAT3{0.5,0.5,0} };
-		float dist = FLT_MAX;
-		float bestDist = FLT_MAX;
 
-		for (int y = 0; y < scene->height; ++y) {
-			for (int x = 0; x < scene->width; ++x) {
-				if (scene->get(x, y) != '#') { continue; }
-				b.Center = XMFLOAT3{ static_cast<float>(x) + 0.5f,static_cast<float>(y) + 0.5f,0 };
-				bool intersects = b.Intersects(origin, dir, OUT dist);
-				if (intersects) {
-					bestDist = std::min(bestDist, dist);
-				}
+	void drawFloor() {
+		D2D1_SIZE_F bitmapSize = pFloorGPUBitmap->GetSize();
+		pLowResRenderTarget->DrawBitmap(
+			pFloorGPUBitmap.Get(),
+			D2D1::RectF(0, 0, bitmapSize.width, bitmapSize.height),
+			1.0f, // Opacity (1.0f = fully opaque)
+			D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+			nullptr // Source rectangle (nullptr to use entire bitmap)
+		);
 
-			}
-
-		}
-		return bestDist;
 	}
 
-	/* output: perspective correction coefficient */
-	float getPixelDir(int x, OUT XMVECTOR& dir) {
-		dir = { imgPlaneDist, static_cast<float>(x) - HSCR_F, 0.f, 0.f };
-		dir = XMVector3Normalize(dir);
-		float screenSpaceAngle = std::atan2f(XMVectorGetY(dir), XMVectorGetX(dir));
-		float angle = std::atan2f(XMVectorGetY(scene->getDir()), XMVectorGetX(scene->getDir()));
-		XMVECTOR worldFromScreen = XMQuaternionRotationAxis({ 0,0,1,0 }, angle);
-		dir = XMVector3Rotate(dir, worldFromScreen);
-
-		return std::abs(cos(screenSpaceAngle));
-	}
-
-	void drawScene() {
+	void drawWalls() {
 		float dist;
 		XMVECTOR dir;
 		for (int x = 0; x < SCR_WIDTH; ++x) {
@@ -446,55 +436,22 @@ public:
 			pLowResRenderTarget->DrawLine(D2D1_POINT_2F(static_cast<float>(x), midLine + lineH), D2D1_POINT_2F(static_cast<float>(x), midLine - lineH), brush, 1.f);
 
 		}
+
 	}
 
-	void loadImage(const std::wstring& filePath, EBitmap eBitmap) {
-
-		ComPtr<IWICBitmapDecoder> pDecoder;
-		HRESULT hr = pWICFactory->CreateDecoderFromFilename(
-			filePath.c_str(),
-			nullptr,
-			GENERIC_READ,
-			WICDecodeMetadataCacheOnLoad,
-			&pDecoder
-		);
-		checkFailed(hr, hWnd, "CreateDecoderFromFileName failed");
-
-		// Get the first frame of the image
-		ComPtr<IWICBitmapFrameDecode> pFrame;
-		hr = pDecoder->GetFrame(0, &pFrame);
-		checkFailed(hr, hWnd, "GetFrame failed");
-
-		// Convert the image format to BGRA, which Direct2D expects
-		ComPtr<IWICFormatConverter> pConverter;
-		hr = pWICFactory->CreateFormatConverter(&pConverter);
-		checkFailed(hr, hWnd, "CreateFormatConverter failed");
-
-		hr = pConverter->Initialize(
-			pFrame.Get(),
-			GUID_WICPixelFormat32bppPBGRA, // Direct2D expects BGRA format with premultiplied alpha
-			WICBitmapDitherTypeNone,
-			nullptr,
-			0.0,
-			WICBitmapPaletteTypeMedianCut
-		);
-		checkFailed(hr, hWnd, "initialize failed");
-
-		hr = pRenderTarget->CreateBitmapFromWicBitmap(
-			pConverter.Get(),
-			nullptr, // Bitmap properties; nullptr for default
-			&bitmaps[eBitmap]
-		);
-		checkFailed(hr, hWnd, "createBitmapFromWicBitmap failed");
+	void drawScene() {
+		updateFloorBitmap();
+		drawFloor();
+		//drawWalls();
 	}
 
 	void drawUI() {
 		if (scene->explodeCd) {
-			D2D1_SIZE_F bitmapSize = bitmaps[EBitmap::Explode]->GetSize();
+			D2D1_SIZE_F bitmapSize = GPUBitmaps[toId(EGPUBitmap::Explode)]->GetSize();
 			bitmapSize.height *= 2;
 			bitmapSize.width *= 2;
 			pLowResRenderTarget->DrawBitmap(
-				bitmaps[EBitmap::Explode].Get(),
+				GPUBitmaps[toId(EGPUBitmap::Explode)].Get(),
 				D2D1::RectF(160, 325, 160 + bitmapSize.width, 325 + bitmapSize.height),
 				1.0f, // Opacity (1.0f = fully opaque)
 				D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
@@ -503,21 +460,21 @@ public:
 		}
 		std::wstring wPoints = std::to_wstring(scene->points);
 
-		textFormats[static_cast<size_t>(TextFormat::SMALL)]->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
+		textFormats[toId(TextFormat::SMALL)]->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
 		pRenderTarget->DrawText(
 			wPoints.c_str(),    // Text to render
 			wcslen(wPoints.c_str()),
-			textFormats[static_cast<size_t>(TextFormat::SMALL)],            // Text format
+			textFormats[toId(TextFormat::SMALL)],            // Text format
 			D2D1::RectF(0, 335, 345, 360), // Layout rectangle
 			brushes["white"]
 		);
 
 		if (!scene->qLeapCd) {
-			D2D1_SIZE_F bitmapSize = bitmaps[EBitmap::QLeap]->GetSize();
+			D2D1_SIZE_F bitmapSize = GPUBitmaps[toId(EGPUBitmap::QLeap)]->GetSize();
 			bitmapSize.height *= 2;
 			bitmapSize.width *= 2;
 			pLowResRenderTarget->DrawBitmap(
-				bitmaps[EBitmap::QLeap].Get(),
+				GPUBitmaps[toId(EGPUBitmap::QLeap)].Get(),
 				D2D1::RectF(15, 325, 15 + bitmapSize.width, 325 + bitmapSize.height),
 				1.0f, // Opacity (1.0f = fully opaque)
 				D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
@@ -531,7 +488,7 @@ public:
 	void drawBorder() {
 		D2D1_RECT_F unitSquare = D2D1::RectF(
 			0.f, 0.f,
-			360.f, 360.f
+			SCR_WIDTH_F,SCR_WIDTH_F 
 		);
 		pRenderTarget->DrawRectangle(unitSquare, brushes["amber"], 2.f);
 
@@ -575,6 +532,7 @@ public:
 		);
 
 	}
+
 	void drawMenu(const std::string& text) {
 		// todo
 		pLowResRenderTarget->DrawText(
@@ -609,6 +567,175 @@ public:
 
 	}
 
+	/* output: perspective correction coefficient */
+	float getPixelDir(int x, OUT XMVECTOR& dir) {
+		dir = { imgPlaneDist, static_cast<float>(x) - HSCR_F, 0.f, 0.f };
+		dir = XMVector3Normalize(dir);
+		float screenSpaceAngle = std::atan2f(XMVectorGetY(dir), XMVectorGetX(dir));
+		float angle = std::atan2f(XMVectorGetY(scene->getDir()), XMVectorGetX(scene->getDir()));
+		XMVECTOR worldFromScreen = XMQuaternionRotationAxis({ 0,0,1,0 }, angle);
+		dir = XMVector3Rotate(dir, worldFromScreen);
+
+		return std::abs(cos(screenSpaceAngle));
+	}
+
+	void updateImgPlaneDist() {
+		float ratio = std::tan(scene->fov / 2.f);
+		imgPlaneDist = HSCR_F / ratio;
+	}
+
+	void wmResize(HWND hwnd) {
+		if (pRenderTarget)
+		{
+			RECT rc;
+			GetClientRect(hwnd, &rc);
+			pRenderTarget->Resize(D2D1::SizeU(rc.right - rc.left, rc.bottom - rc.top));
+		}
+	}
+
+	void loadGPUBitmap(const std::wstring& filePath, EGPUBitmap eBitmap) {
+		ComPtr<IWICBitmapDecoder> pDecoder;
+		HRESULT hr = pWICFactory->CreateDecoderFromFilename(
+			filePath.c_str(),
+			nullptr,
+			GENERIC_READ,
+			WICDecodeMetadataCacheOnLoad,
+			&pDecoder
+		);
+		checkFailed(hr, hWnd, "CreateDecoderFromFileName failed");
+
+		// Get the first frame of the image
+		ComPtr<IWICBitmapFrameDecode> pFrame;
+		hr = pDecoder->GetFrame(0, &pFrame);
+		checkFailed(hr, hWnd, "GetFrame failed");
+
+		// Convert the image format to BGRA, which Direct2D expects
+		ComPtr<IWICFormatConverter> pConverter;
+		hr = pWICFactory->CreateFormatConverter(&pConverter);
+		checkFailed(hr, hWnd, "CreateFormatConverter failed");
+
+		hr = pConverter->Initialize(
+			pFrame.Get(),
+			GUID_WICPixelFormat32bppPBGRA, // Direct2D expects BGRA format with premultiplied alpha
+			WICBitmapDitherTypeNone,
+			nullptr,
+			0.0,
+			WICBitmapPaletteTypeMedianCut
+		);
+		checkFailed(hr, hWnd, "initialize failed");
+
+		hr = pRenderTarget->CreateBitmapFromWicBitmap(
+			pConverter.Get(),
+			nullptr, // Bitmap properties; nullptr for default
+			&GPUBitmaps[toId(eBitmap)]
+		);
+		checkFailed(hr, hWnd, "createBitmapFromWicBitmap failed");
+	}
+
+	float intersect(const XMVECTOR& origin, const XMVECTOR& dir) {
+		BoundingBox b{ XMFLOAT3{0,0,0}, XMFLOAT3{0.5,0.5,0} };
+		float dist = FLT_MAX;
+		float bestDist = FLT_MAX;
+
+		for (int y = 0; y < scene->height; ++y) {
+			for (int x = 0; x < scene->width; ++x) {
+				if (scene->get(x, y) != '#') { continue; }
+				b.Center = XMFLOAT3{ static_cast<float>(x) + 0.5f,static_cast<float>(y) + 0.5f,0 };
+				bool intersects = b.Intersects(origin, dir, OUT dist);
+				if (intersects) {
+					bestDist = std::min(bestDist, dist);
+				}
+
+			}
+
+		}
+		return bestDist;
+	}
+
+	void initFloor(const std::wstring& filePath) {
+		// CPU Side: 
+		ComPtr<IWICBitmapDecoder> decoder;
+		HRESULT hr = pWICFactory->CreateDecoderFromFilename(filePath.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder);
+		checkFailed(hr, hWnd, "Failed to load image");
+
+		// Get the first frame of the image
+		ComPtr<IWICBitmapFrameDecode> frame;
+		hr = decoder->GetFrame(0, &frame);
+		checkFailed(hr, hWnd, "failed to get image frame");
+
+		UINT width, height;
+		frame->GetSize(&width, &height);
+
+		ComPtr<IWICFormatConverter> pConverter;
+		hr = pWICFactory->CreateFormatConverter(&pConverter);
+		checkFailed(hr, hWnd, "failed to create format converter\n");
+
+		hr = pConverter->Initialize(frame.Get(), GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, nullptr, 0, WICBitmapPaletteTypeCustom);
+		checkFailed(hr, hWnd, "failed to init format converter");
+
+		// Allocate memory for pixel data
+		floorCPUTex = CPUBitmap(width, height, 4, {});
+		floorCPUTex.data.resize(width * height * 4);
+
+		// Copy pixels to the vector
+		hr = pConverter->CopyPixels(nullptr, width * 4, static_cast<UINT>(floorCPUTex.data.size()), floorCPUTex.data.data());
+		checkFailed(hr, hWnd, "failed to copy pixels");
+
+		// GPU Side:
+		D2D1_SIZE_U size = { SCR_WIDTH, SCR_WIDTH };
+		D2D1_BITMAP_PROPERTIES props = {
+			{ DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED }, // BGRA format required for Direct2D
+			96.0f, 96.0f // DPI
+		};
+
+		pLowResRenderTarget->CreateBitmap(size, nullptr, 0, &props, &pFloorGPUBitmap);
+
+	}
+
+	void updateFloorBitmap() {
+
+		// perspective calculations:
+		//Step 1: Create a CPU-side pixel buffer
+		const UINT& width = floorCPUTex.width;
+		const UINT& height = floorCPUTex.height;
+		std::vector<uint32_t> pixelBuffer(SCR_WIDTH * SCR_WIDTH, 0x000000FF); // Initialize with black
+
+		// Step 2: Modify the buffer 
+		float _x = 0.f;
+		float _y = 0.f;
+		float z = -HSCR;
+		float scaleX = 150;
+		float scaleY = 150;
+		for (int y = 0; y < SCR_WIDTH; ++y) {
+			_y = y / z;
+			_y = std::abs(_y);
+			_y *= scaleY;
+			_y = fmod(_y, height);
+
+			for (int x = 0; x < SCR_WIDTH; ++x) {
+				_x = (HSCR - x) / z;
+				if (_x < 0)_x *= -1;
+				_x *= scaleX;
+				_x = fmod(_x, width);
+				size_t pixId = floorCPUTex.getPixel(toId(_x), toId(_y));
+				uint8_t b = floorCPUTex.data[pixId];
+				uint8_t g = floorCPUTex.data[pixId + 1];
+				uint8_t r = floorCPUTex.data[pixId + 2];
+				uint8_t a = floorCPUTex.data[pixId + 3];
+				//pixelBuffer[y * SCR_WIDTH + x] = (b << 24) | (g << 16) | (r << 8) | 0xFF; // BGRA
+				pixelBuffer[y * SCR_WIDTH + x] = (0xFF << 24) | (r << 16) | (g << 8) | b;
+
+			}
+			z++;
+		}
+
+		// transfer to GPU Bitmap for rendering
+
+		// Step 4: Copy CPU buffer to Direct2D bitmap
+		D2D1_RECT_U destRect = { 0, 0, SCR_WIDTH, SCR_WIDTH };
+		pFloorGPUBitmap->CopyFromMemory(&destRect, pixelBuffer.data(), SCR_WIDTH * sizeof(uint32_t));
+
+	}
 private:
 	void checkFailed(HRESULT hr, HWND hwnd, const std::string& message) {
 		if (FAILED(hr))
@@ -639,8 +766,12 @@ private:
 	using DrawFunction = void(GJRenderer::*)();
 	std::array<DrawFunction, static_cast<size_t>(State::size)> drawCallTable;
 
-	std::array<ComPtr<ID2D1Bitmap>, EBitmap::size> bitmaps;
+	std::array<ComPtr<ID2D1Bitmap>, toId(EGPUBitmap::size)> GPUBitmaps;
+	std::array<CPUBitmap, toId(ECPUBitmap::size)> CPUBitmaps;
+	ComPtr<ID2D1Bitmap> pFloorGPUBitmap;
+	CPUBitmap floorCPUTex;
 	float imgPlaneDist;
 	float MAXVIEWDIST = 90.f;
+
 };
 
