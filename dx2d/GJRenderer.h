@@ -101,7 +101,7 @@ public:
 
 		loadGPUBitmap(L"assets/qLeap.png", EGPUBitmap::QLeap);
 		loadGPUBitmap(L"assets/explode.png", EGPUBitmap::Explode);
-		initFloor(L"assets/textures/4.png");
+		initDrawBuffer(L"assets/textures/4.png");
 		if (toId(EGPUBitmap::size) != 2) {
 			MessageBox(NULL, L"update bitmaps!", L"Error", MB_OK);
 		}
@@ -286,6 +286,7 @@ public:
 		//drawBorder();
 		(this->*drawCallTable[static_cast<size_t>(scene->state)])();
 
+
 		// draw low res rt to main rt
 		pLowResRenderTarget->EndDraw();
 
@@ -410,18 +411,6 @@ public:
 
 	}
 
-	void drawFloor() {
-		D2D1_SIZE_F bitmapSize = pFloorGPUBitmap->GetSize();
-		pLowResRenderTarget->DrawBitmap(
-			pFloorGPUBitmap.Get(),
-			D2D1::RectF(0, 0, bitmapSize.width, bitmapSize.height),
-			1.0f, // Opacity (1.0f = fully opaque)
-			D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
-			nullptr // Source rectangle (nullptr to use entire bitmap)
-		);
-
-	}
-
 	void drawWalls() {
 		float dist;
 		XMVECTOR dir;
@@ -440,8 +429,20 @@ public:
 	}
 
 	void drawScene() {
-		updateFloorBitmap();
-		drawFloor();
+		updateDrawBuffer();
+
+		D2D1_RECT_U destRect = { 0, 0, SCR_WIDTH, SCR_WIDTH };
+		pFloorGPUBitmap->CopyFromMemory(&destRect, drawBuffer.data(), SCR_WIDTH * sizeof(uint32_t));
+
+		D2D1_SIZE_F bitmapSize = pFloorGPUBitmap->GetSize();
+		pLowResRenderTarget->DrawBitmap(
+			pFloorGPUBitmap.Get(),
+			D2D1::RectF(0, 0, bitmapSize.width, bitmapSize.height),
+			1.0f, // Opacity (1.0f = fully opaque)
+			D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+			nullptr // Source rectangle (nullptr to use entire bitmap)
+		);
+
 		//drawWalls();
 	}
 
@@ -488,7 +489,7 @@ public:
 	void drawBorder() {
 		D2D1_RECT_F unitSquare = D2D1::RectF(
 			0.f, 0.f,
-			SCR_WIDTH_F,SCR_WIDTH_F 
+			SCR_WIDTH_F, SCR_WIDTH_F
 		);
 		pRenderTarget->DrawRectangle(unitSquare, brushes["amber"], 2.f);
 
@@ -652,7 +653,7 @@ public:
 		return bestDist;
 	}
 
-	void initFloor(const std::wstring& filePath) {
+	void initDrawBuffer(const std::wstring& filePath) {
 		// CPU Side: 
 		ComPtr<IWICBitmapDecoder> decoder;
 		HRESULT hr = pWICFactory->CreateDecoderFromFilename(filePath.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder);
@@ -688,52 +689,58 @@ public:
 			96.0f, 96.0f // DPI
 		};
 
+		drawBuffer = std::vector<uint32_t>(SCR_WIDTH * SCR_WIDTH, 0x000000FF);
 		pLowResRenderTarget->CreateBitmap(size, nullptr, 0, &props, &pFloorGPUBitmap);
 
 	}
 
-	void updateFloorBitmap() {
+	void updateDrawBuffer() {
+		// Sky:
+		float bandH = 10;
+		uint8_t r = 240;
+		uint8_t g = r / 2;
+		uint8_t b = r / 2;
+		uint8_t minR = 100;
+		for (int y = 0; y < horizon; y += bandH) {
+			for (int bandStep = 0; bandStep < bandH * SCR_WIDTH; ++bandStep) {
+				uint32_t topBandColor = (0xFF << 24) | (r << 16) | (g << 8) | b;
+				drawBuffer[y * SCR_WIDTH + bandStep] = topBandColor;
+			}
+			bandH = std::clamp(bandH / 1.2f, 1.f, bandH);
+			r /= 1.2;
+			g = r / 2;
+			b = r / 2;
+		}
 
-		// perspective calculations:
-		//Step 1: Create a CPU-side pixel buffer
-		const UINT& width = floorCPUTex.width;
-		const UINT& height = floorCPUTex.height;
-		std::vector<uint32_t> pixelBuffer(SCR_WIDTH * SCR_WIDTH, 0x000000FF); // Initialize with black
+		// Floor:
+		const UINT& texW = floorCPUTex.width;
+		const UINT& texH = floorCPUTex.height;
 
-		// Step 2: Modify the buffer 
 		float _x = 0.f;
 		float _y = 0.f;
-		float z = -HSCR;
+		float z = 1;
 		float scaleX = 150;
 		float scaleY = 150;
-		for (int y = 0; y < SCR_WIDTH; ++y) {
+		for (int y = horizon; y < SCR_WIDTH; ++y) {
 			_y = y / z;
-			_y = std::abs(_y);
 			_y *= scaleY;
-			_y = fmod(_y, height);
+			_y = fmod(_y, texH);
 
 			for (int x = 0; x < SCR_WIDTH; ++x) {
 				_x = (HSCR - x) / z;
-				if (_x < 0)_x *= -1;
+				_x = std::abs(_x);
 				_x *= scaleX;
-				_x = fmod(_x, width);
+				_x = fmod(_x, texW);
 				size_t pixId = floorCPUTex.getPixel(toId(_x), toId(_y));
 				uint8_t b = floorCPUTex.data[pixId];
 				uint8_t g = floorCPUTex.data[pixId + 1];
 				uint8_t r = floorCPUTex.data[pixId + 2];
 				uint8_t a = floorCPUTex.data[pixId + 3];
-				//pixelBuffer[y * SCR_WIDTH + x] = (b << 24) | (g << 16) | (r << 8) | 0xFF; // BGRA
-				pixelBuffer[y * SCR_WIDTH + x] = (0xFF << 24) | (r << 16) | (g << 8) | b;
-
+				drawBuffer[y * SCR_WIDTH + x] = (0xFF << 24) | (r << 16) | (g << 8) | b;
 			}
-			z++;
+			++z;
 		}
 
-		// transfer to GPU Bitmap for rendering
-
-		// Step 4: Copy CPU buffer to Direct2D bitmap
-		D2D1_RECT_U destRect = { 0, 0, SCR_WIDTH, SCR_WIDTH };
-		pFloorGPUBitmap->CopyFromMemory(&destRect, pixelBuffer.data(), SCR_WIDTH * sizeof(uint32_t));
 
 	}
 private:
@@ -768,8 +775,10 @@ private:
 
 	std::array<ComPtr<ID2D1Bitmap>, toId(EGPUBitmap::size)> GPUBitmaps;
 	std::array<CPUBitmap, toId(ECPUBitmap::size)> CPUBitmaps;
-	ComPtr<ID2D1Bitmap> pFloorGPUBitmap;
+	ComPtr<ID2D1Bitmap> pFloorGPUBitmap; // in initDrawBuffer
+	std::vector<uint32_t> drawBuffer;  // in initDrawBuffer
 	CPUBitmap floorCPUTex;
+	uint32_t horizon = SCR_WIDTH / 2;
 	float imgPlaneDist;
 	float MAXVIEWDIST = 90.f;
 
