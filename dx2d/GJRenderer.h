@@ -695,22 +695,50 @@ public:
 	}
 
 	void updateDrawBuffer() {
-		// Sky:
-		float bandH = 10;
-		uint8_t r = 240;
-		uint8_t g = r / 2;
-		uint8_t b = r / 2;
-		uint8_t minR = 100;
-		for (int y = 0; y < horizon; y += bandH) {
-			for (int bandStep = 0; bandStep < bandH * SCR_WIDTH; ++bandStep) {
-				uint32_t topBandColor = (0xFF << 24) | (r << 16) | (g << 8) | b;
-				drawBuffer[y * SCR_WIDTH + bandStep] = topBandColor;
+		int topBandHeight = 25;
+		zzz blue line on horizon
+		int r_top = 240;
+		int r_min = 100;
+		// Compute the geometric factor f so that (h0 - f) / (1 - f) == horizon.
+		// Derived from:
+		//   Sum S = (topBandHeight - f)/(1 - f)  must equal horizon.
+
+		float f = (horizon - topBandHeight) / float(horizon - 1);
+
+		// Compute the (non-integer) number of bands so that last band = 1 pixel:
+		float Nf = 1 + log(1.0f / topBandHeight) / log(f);
+		int N = std::ceil(Nf);
+
+		float yPos = 0.0f;
+		for (int i = 0; i < N && yPos < horizon; ++i)
+		{
+			// Compute this band's height (using the geometric progression)
+			float bandHeightF = topBandHeight * std::pow(f, i);
+			int bandHeight = std::max(1, int(std::round(bandHeightF)));
+
+			// Make sure we do not go past the horizon.
+			if (yPos + bandHeight > horizon)
+				bandHeight = horizon - int(yPos);
+
+			// Compute color interpolation factor (0 at top, 1 at bottom)
+			float t = (N > 1) ? float(i) / (N - 1) : 0.f;
+			uint8_t r = uint8_t(std::round(r_top + t * (r_min - r_top)));
+			// For this example, we derive g and b from r. Feel free to adjust!
+			uint8_t g = r / 2;
+			uint8_t b = r / 2;
+			uint32_t color = (0xFF << 24) | (r << 16) | (g << 8) | b;
+
+			// Draw the horizontal band.
+			for (int y = int(yPos); y < int(yPos) + bandHeight; ++y)
+			{
+				for (int x = 0; x < SCR_WIDTH; ++x)
+				{
+					drawBuffer[y * SCR_WIDTH + x] = color;
+				}
 			}
-			bandH = std::clamp(bandH / 1.2f, 1.f, bandH);
-			r /= 1.2;
-			g = r / 2;
-			b = r / 2;
+			yPos += bandHeight;
 		}
+
 
 		// Floor:
 		const UINT& texW = floorCPUTex.width;
