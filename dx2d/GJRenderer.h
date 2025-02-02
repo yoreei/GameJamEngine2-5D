@@ -19,12 +19,6 @@ using Microsoft::WRL::ComPtr;
 
 #include "GJScene.h"
 
-inline int SCR_WIDTH = 960;
-inline float SCR_WIDTH_F = 960;
-inline float HSCR_F = SCR_WIDTH_F / 2.f;
-inline int HSCR = SCR_WIDTH / 2;
-
-
 constexpr size_t toId(auto someEnum) {
 	return static_cast<size_t>(someEnum);
 }
@@ -90,7 +84,7 @@ public:
 
 		// Create a compatible render target for low-res drawing
 		hr = pRenderTarget->CreateCompatibleRenderTarget(
-			D2D1::SizeF(SCR_WIDTH_F, SCR_WIDTH_F),
+			D2D1::SizeF(scene->SCR_WIDTH_F, scene->SCR_WIDTH_F),
 			&pLowResRenderTarget
 		);
 		checkFailed(hr, hWnd, "createCompatibleRenderTarget failed");
@@ -217,13 +211,13 @@ public:
 		int screenWidth = GetSystemMetrics(SM_CXSCREEN);
 		int screenHeight = GetSystemMetrics(SM_CYSCREEN);
 
-		float scaleF = static_cast<float>(screenHeight) / SCR_WIDTH_F;
+		float scaleF = static_cast<float>(screenHeight) / scene->SCR_WIDTH_F;
 		D2D1::Matrix3x2F scale = D2D1::Matrix3x2F::Scale(
 			scaleF, scaleF,
 			D2D1::Point2F(0.f, 0.f)
 		);
 
-		float offsetF = (screenWidth - scaleF * SCR_WIDTH_F) / 2.f;
+		float offsetF = (screenWidth - scaleF * scene->SCR_WIDTH_F) / 2.f;
 		D2D1::Matrix3x2F translation = D2D1::Matrix3x2F::Translation(
 			offsetF, // X offset
 			0.f  // Y offset
@@ -297,8 +291,8 @@ public:
 		D2D1_RECT_F destRect = D2D1::RectF(
 			0.0f,                         // Left
 			0.0f,                         // Top
-			SCR_WIDTH_F,  // Right
-			SCR_WIDTH_F  // Bottom
+			scene->SCR_WIDTH_F,  // Right
+			scene->SCR_WIDTH_F  // Bottom
 		);
 		pRenderTarget->DrawBitmap(
 			pLowResBitmap,                                    // The bitmap to draw
@@ -414,14 +408,14 @@ public:
 	void drawWalls() {
 		float dist;
 		XMVECTOR dir;
-		for (int x = 0; x < SCR_WIDTH; ++x) {
+		for (int x = 0; x < scene->SCR_WIDTH; ++x) {
 			float fixPersp = getPixelDir(x, OUT dir);
 			dist = intersect(scene->position, dir);
 			float color = -(dist / MAXVIEWDIST) + 1.f;
 			brush->SetColor(D2D1::ColorF(color, color, color));
 			dist = std::clamp(dist, 0.f, MAXVIEWDIST);
-			float lineH = SCR_WIDTH_F / (dist * fixPersp);
-			float midLine = SCR_WIDTH_F / 2.f;
+			float lineH = scene->SCR_WIDTH_F / (dist * fixPersp);
+			float midLine = scene->SCR_WIDTH_F / 2.f;
 			pLowResRenderTarget->DrawLine(D2D1_POINT_2F(static_cast<float>(x), midLine + lineH), D2D1_POINT_2F(static_cast<float>(x), midLine - lineH), brush, 1.f);
 
 		}
@@ -431,8 +425,8 @@ public:
 	void drawScene() {
 		updateDrawBuffer();
 
-		D2D1_RECT_U destRect = { 0, 0, SCR_WIDTH, SCR_WIDTH };
-		pFloorGPUBitmap->CopyFromMemory(&destRect, drawBuffer.data(), SCR_WIDTH * sizeof(uint32_t));
+		D2D1_RECT_U destRect = { 0, 0, scene->SCR_WIDTH, scene->SCR_WIDTH };
+		pFloorGPUBitmap->CopyFromMemory(&destRect, drawBuffer.data(), scene->SCR_WIDTH * sizeof(uint32_t));
 
 		D2D1_SIZE_F bitmapSize = pFloorGPUBitmap->GetSize();
 		pLowResRenderTarget->DrawBitmap(
@@ -489,7 +483,7 @@ public:
 	void drawBorder() {
 		D2D1_RECT_F unitSquare = D2D1::RectF(
 			0.f, 0.f,
-			SCR_WIDTH_F, SCR_WIDTH_F
+			scene->SCR_WIDTH_F, scene->SCR_WIDTH_F
 		);
 		pRenderTarget->DrawRectangle(unitSquare, brushes["amber"], 2.f);
 
@@ -570,7 +564,7 @@ public:
 
 	/* output: perspective correction coefficient */
 	float getPixelDir(int x, OUT XMVECTOR& dir) {
-		dir = { imgPlaneDist, static_cast<float>(x) - HSCR_F, 0.f, 0.f };
+		dir = { imgPlaneDist, static_cast<float>(x) - scene->HSCR_F, 0.f, 0.f };
 		dir = XMVector3Normalize(dir);
 		float screenSpaceAngle = std::atan2f(XMVectorGetY(dir), XMVectorGetX(dir));
 		float angle = std::atan2f(XMVectorGetY(scene->getDir()), XMVectorGetX(scene->getDir()));
@@ -582,7 +576,7 @@ public:
 
 	void updateImgPlaneDist() {
 		float ratio = std::tan(scene->fov / 2.f);
-		imgPlaneDist = HSCR_F / ratio;
+		imgPlaneDist = scene->HSCR_F / ratio;
 	}
 
 	void wmResize(HWND hwnd) {
@@ -683,60 +677,66 @@ public:
 		checkFailed(hr, hWnd, "failed to copy pixels");
 
 		// GPU Side:
-		D2D1_SIZE_U size = { SCR_WIDTH, SCR_WIDTH };
+		D2D1_SIZE_U size = { scene->SCR_WIDTH, scene->SCR_WIDTH };
 		D2D1_BITMAP_PROPERTIES props = {
 			{ DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED }, // BGRA format required for Direct2D
 			96.0f, 96.0f // DPI
 		};
 
-		drawBuffer = std::vector<uint32_t>(SCR_WIDTH * SCR_WIDTH, 0x000000FF);
+		drawBuffer = std::vector<uint32_t>(scene->SCR_WIDTH * scene->SCR_WIDTH, 0x000000FF);
 		pLowResRenderTarget->CreateBitmap(size, nullptr, 0, &props, &pFloorGPUBitmap);
 
 	}
 
 	void updateDrawBuffer() {
-		int topBandHeight = 25;
-		zzz blue line on horizon
-		int r_top = 240;
-		int r_min = 100;
+		// Sky
+
+		float t_horizon = scene->zDir / scene->minZ;
+		int horizon = scene->HSCR + t_horizon * scene->HSCR;
+		horizon = std::clamp(horizon, 0, scene->SCR_WIDTH - 1);
+		int topBandHeight = 0.3 * scene->SCR_WIDTH_F;
+		int r_top = 200;
+		int g_top = 150;
+		int b_top = 150;
+		int r_min = 50;
+		int g_min = 25;
+		int b_min = 25;
 		// Compute the geometric factor f so that (h0 - f) / (1 - f) == horizon.
 		// Derived from:
 		//   Sum S = (topBandHeight - f)/(1 - f)  must equal horizon.
 
-		float f = (horizon - topBandHeight) / float(horizon - 1);
+		float f = (scene->SCR_WIDTH_F - topBandHeight) / float(scene->SCR_WIDTH_F - 1);
 
 		// Compute the (non-integer) number of bands so that last band = 1 pixel:
 		float Nf = 1 + log(1.0f / topBandHeight) / log(f);
 		int N = std::ceil(Nf);
 
-		float yPos = 0.0f;
-		for (int i = 0; i < N && yPos < horizon; ++i)
+		int yPos = horizon;
+		int bandHeight;
+		float bandHeightF;
+		for (int i = N; i >= 0 && yPos >= 0; --i)
 		{
 			// Compute this band's height (using the geometric progression)
-			float bandHeightF = topBandHeight * std::pow(f, i);
-			int bandHeight = std::max(1, int(std::round(bandHeightF)));
-
-			// Make sure we do not go past the horizon.
-			if (yPos + bandHeight > horizon)
-				bandHeight = horizon - int(yPos);
+			bandHeightF = topBandHeight * std::pow(f, i);
+			bandHeight = std::max(1, int(std::round(bandHeightF)));
 
 			// Compute color interpolation factor (0 at top, 1 at bottom)
-			float t = (N > 1) ? float(i) / (N - 1) : 0.f;
-			uint8_t r = uint8_t(std::round(r_top + t * (r_min - r_top)));
-			// For this example, we derive g and b from r. Feel free to adjust!
-			uint8_t g = r / 2;
-			uint8_t b = r / 2;
+			float t_r = (N > 1) ? float(i) / (N - 1) : 0.f;
+			float t_g = (N > 1) ? float(i) / (N - 1) : 0.f;
+			uint8_t r = uint8_t(std::round(r_top + t_r * (r_min - r_top)));
+			uint8_t g = uint8_t(std::round(g_top + t_g * (g_min - g_top)));
+			uint8_t b = uint8_t(std::round(b_top + t_g * (b_min - b_top)));
 			uint32_t color = (0xFF << 24) | (r << 16) | (g << 8) | b;
 
 			// Draw the horizontal band.
-			for (int y = int(yPos); y < int(yPos) + bandHeight; ++y)
+			for (int y = int(yPos); y >= 0; --y)
 			{
-				for (int x = 0; x < SCR_WIDTH; ++x)
+				for (int x = 0; x < scene->SCR_WIDTH; ++x)
 				{
-					drawBuffer[y * SCR_WIDTH + x] = color;
+					drawBuffer[y * scene->SCR_WIDTH + x] = color;
 				}
 			}
-			yPos += bandHeight;
+			yPos -= bandHeight;
 		}
 
 
@@ -746,16 +746,27 @@ public:
 
 		float _x = 0.f;
 		float _y = 0.f;
-		float z = 1;
 		float scaleX = 150;
 		float scaleY = 150;
-		for (int y = horizon; y < SCR_WIDTH; ++y) {
-			_y = y / z;
+
+		//v turned out we don't need these?
+		//float zStart = scene->HSCR_F * std::abs(scene->zDir) + 1;
+		//float zEnd = scene->HSCR_F;
+
+		float z = 1;
+		for (int y = horizon; y < scene->SCR_WIDTH; ++y) {
+
+			//v turned out we don't need these?
+			//float t = float(y - horizon) / float(scene->SCR_WIDTH - horizon);
+			//float z = zStart + t * (zEnd - zStart);
+
+			//v `-horizon` makes sure texture does not appear to move when horizon changes. Not sure why `HSCR_F` worked so well 
+			float _y = (y - horizon + scene->HSCR_F) / z;
 			_y *= scaleY;
 			_y = fmod(_y, texH);
 
-			for (int x = 0; x < SCR_WIDTH; ++x) {
-				_x = (HSCR - x) / z;
+			for (int x = 0; x < scene->SCR_WIDTH; ++x) {
+				_x = (scene->HSCR - x) / z;
 				_x = std::abs(_x);
 				_x *= scaleX;
 				_x = fmod(_x, texW);
@@ -764,7 +775,7 @@ public:
 				uint8_t g = floorCPUTex.data[pixId + 1];
 				uint8_t r = floorCPUTex.data[pixId + 2];
 				uint8_t a = floorCPUTex.data[pixId + 3];
-				drawBuffer[y * SCR_WIDTH + x] = (0xFF << 24) | (r << 16) | (g << 8) | b;
+				drawBuffer[y * scene->SCR_WIDTH + x] = (0xFF << 24) | (r << 16) | (g << 8) | b;
 			}
 			++z;
 		}
@@ -806,7 +817,6 @@ private:
 	ComPtr<ID2D1Bitmap> pFloorGPUBitmap; // in initDrawBuffer
 	std::vector<uint32_t> drawBuffer;  // in initDrawBuffer
 	CPUBitmap floorCPUTex;
-	uint32_t horizon = SCR_WIDTH / 2;
 	float imgPlaneDist;
 	float MAXVIEWDIST = 90.f;
 

@@ -78,14 +78,20 @@ public:
 			else if (wParam == VK_RIGHT) {
 				scene.setDir(XMVector3Rotate(scene.getDir(), rightRot));
 			}
-			else if (wParam == VK_UP) {
+			else if (wParam == 'W') {
 				scene.position = scene.position + scene.getDir();
 			}
-			else if (wParam == VK_DOWN) {
+			else if (wParam == 'S') {
 				scene.position = scene.position - scene.getDir();
 			}
 			else if (wParam == VK_SPACE) {
 				castQLeap();
+			}
+			else if (wParam == VK_UP) {
+				scene.zDir = std::clamp(scene.zDir + 0.1f, scene.minZ, scene.maxZ);
+			}
+			else if (wParam == VK_DOWN) {
+				scene.zDir = std::clamp(scene.zDir - 0.1f, scene.minZ, scene.maxZ);
 			}
 
 

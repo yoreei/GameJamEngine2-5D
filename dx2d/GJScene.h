@@ -92,6 +92,7 @@ struct GJScene {
 	GJScene() {
 		loadMap(mapFile);
 		setDir({ 0,-1,0,0 });
+		setFov(1.f); //70deg
 	}
 	void loadMap(const std::string& fileName) {
 		std::string line;
@@ -138,11 +139,20 @@ struct GJScene {
 		obstacles.fill(GJScene::emptyEntity);
 	}
 
+	void setFov(float newFov) {
+		fov = newFov;
+		vfov = fov;
+		maxZ = sin(vfov / 2.f);
+		minZ = -sin(vfov / 2.f);
+	}
 
 	//std::array<int, 255> keybinds;
 	//Entity playerController;
 	//float fov = 1.22f; //70deg
-	float fov = 1.f; //70deg
+	float fov;
+	float vfov;
+	float maxZ;
+	float minZ;
 	//XMVECTOR viewAngleQuatL = XMQuaternionRotationAxis({0,0,1,0}, std::numbers::pi / 5);
 	//XMVECTOR viewAngleQuatR = XMQuaternionInverse(viewAngleQuatL);
 	std::string map;
@@ -170,6 +180,13 @@ struct GJScene {
 		dir = newDir;
 		left = XMVector3Cross(dir, { 0.f,0.f,1.f,0.f });
 	}
+
+	int SCR_WIDTH = 960;
+	float SCR_WIDTH_F = 960;
+	float HSCR_F = SCR_WIDTH_F / 2.f;
+	int HSCR = SCR_WIDTH / 2;
+	/* 1 up, -1 down, 0 center */
+	float zDir = 0;
 
 private:
 	XMVECTOR dir;
