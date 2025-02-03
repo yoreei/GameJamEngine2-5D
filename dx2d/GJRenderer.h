@@ -746,8 +746,8 @@ public:
 
 		float _x = 0.f;
 		float _y = 0.f;
-		float scaleX = 150;
-		float scaleY = 150;
+		float scale = 150;
+		XMVECTOR pos = scene->position;
 
 		//v turned out we don't need these?
 		//float zStart = scene->HSCR_F * std::abs(scene->zDir) + 1;
@@ -762,13 +762,36 @@ public:
 
 			//v `-horizon` makes sure texture does not appear to move when horizon changes. Not sure why `HSCR_F` worked so well 
 			float _y = (y - horizon + scene->HSCR_F) / z;
-			_y *= scaleY;
-			_y = fmod(_y, texH);
+			_y *= scale;
+			float yCan = XMVectorGetY(pos * 10);
+			if (z < 0) {
+				_y += yCan;
+			}
+			else {
+				_y -= yCan;
+			}
+
+			if (_y < 0) {
+				_y *= -1;
+			}
+
+			_y = std::abs(fmod(_y, texH));
 
 			for (int x = 0; x < scene->SCR_WIDTH; ++x) {
 				_x = (scene->HSCR - x) / z;
-				_x = std::abs(_x);
-				_x *= scaleX;
+				//_x = std::abs(_x);
+				_x *= scale;
+				float xCan = XMVectorGetX(pos * 10);
+				if (z < 0) {
+					_x += xCan;
+				}
+				else {
+					_x -= xCan;
+				}
+
+				if (_x < 0) {
+					_x *= -1;
+				}
 				_x = fmod(_x, texW);
 				size_t pixId = floorCPUTex.getPixel(toId(_x), toId(_y));
 				uint8_t b = floorCPUTex.data[pixId];
