@@ -9,7 +9,7 @@
 #include <DirectXMath.h>
 
 #include "GJScene.h"
-#include "irrKlang.h"
+#include "irrklang/irrKlang.h"
 #include "GJGlobals.h"
 
 using namespace DirectX;
@@ -79,10 +79,10 @@ public:
 				scene.setDir(XMVector3Rotate(scene.getDir(), rightRot));
 			}
 			else if (wParam == 'W') {
-				scene.position = scene.position + scene.getDir();
+				scene.position = scene.position + scene.getDir() * 0.1f;
 			}
 			else if (wParam == 'S') {
-				scene.position = scene.position - scene.getDir();
+				scene.position = scene.position - scene.getDir() * 0.1f;
 			}
 			else if (wParam == VK_SPACE) {
 				castQLeap();

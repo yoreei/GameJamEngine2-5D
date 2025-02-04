@@ -72,12 +72,12 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(SolutionDir)include\irrklang;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)include\irrklang;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(IncludePath)</LibraryPath>
+    <IncludePath>$(SolutionDir)include;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)include\spdlog;$(SolutionDir)include\irrklang;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(IncludePath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(SolutionDir)include\irrklang;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)include\irrklang;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(IncludePath)</LibraryPath>
+    <IncludePath>$(SolutionDir)include;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)include\spdlog;$(SolutionDir)include\irrklang;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(IncludePath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -118,8 +118,8 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>%(AdditionalDependencies);irrKlang.lib;kernel32.lib;Dwrite.lib;windowscodecs.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(SolutionDir)libs\irrklang;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>%(AdditionalDependencies);spdlogd.lib;irrKlang.lib;kernel32.lib;Dwrite.lib;windowscodecs.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)libs\spdlog;$(SolutionDir)libs\irrklang;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -137,8 +137,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(SolutionDir)libs\irrklang;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>%(AdditionalDependencies);irrKlang.lib;kernel32.lib;Dwrite.lib;windowscodecs.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)libs\spdlog;$(SolutionDir)libs\irrklang;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>%(AdditionalDependencies);spdlogd.lib;irrKlang.lib;kernel32.lib;Dwrite.lib;windowscodecs.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

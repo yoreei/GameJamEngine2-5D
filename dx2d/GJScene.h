@@ -93,6 +93,7 @@ struct GJScene {
 		loadMap(mapFile);
 		setDir({ 0,-1,0,0 });
 		setFov(1.f); //70deg
+		setResolution(960, 1.f);
 	}
 	void loadMap(const std::string& fileName) {
 		std::string line;
@@ -149,8 +150,6 @@ struct GJScene {
 	//std::array<int, 255> keybinds;
 	//Entity playerController;
 	//float fov = 1.22f; //70deg
-	float fov;
-	float vfov;
 	float maxZ;
 	float minZ;
 	//XMVECTOR viewAngleQuatL = XMQuaternionRotationAxis({0,0,1,0}, std::numbers::pi / 5);
@@ -169,6 +168,10 @@ struct GJScene {
 	std::array<Entity, 4> entities{};
 	std::array<Entity, 25> obstacles{};
 	static inline Entity emptyEntity;
+
+	/* 1 up, -1 down, 0 center */
+	float zDir = 0;
+	// only x and y are used
 	XMVECTOR position{ 0,0,0,0 };
 	const XMVECTOR& getDir() const {
 		return dir;
@@ -180,15 +183,66 @@ struct GJScene {
 		dir = newDir;
 		left = XMVector3Cross(dir, { 0.f,0.f,1.f,0.f });
 	}
+	float camHeight = 0.5f;
+	//v radians
+	const float getFov() const {
+		return fov;
+	}
+	//v radians
+	const float getVfov() const {
+		return vfov;
+	}
 
-	int SCR_WIDTH = 960;
-	float SCR_WIDTH_F = 960;
-	float HSCR_F = SCR_WIDTH_F / 2.f;
-	int HSCR = SCR_WIDTH / 2;
-	/* 1 up, -1 down, 0 center */
-	float zDir = 0;
+	//v ABGR
+	uint32_t sampleFloor(float x, float y) const {
+		uint8_t c = int(std::floor(x)) + int(std::floor(y));
+		c %= 2;
+		c *= 255;
+		return (0xFF << 24) | (c << 16) | (c << 8) | (c);
+
+	}
+	int ScrH() const {
+		return scr_height;
+	}
+	int ScrW() const {
+		return scr_width;
+	}
+	int HscrH() const {
+		return hscr_height;
+	}
+	int HscrW() const {
+		return hscr_width;
+	}
+	float ScrHf() const {
+		return scr_height;
+	}
+	float ScrWf() const {
+		return scr_width;
+	}
+	float HscrHf() const {
+		return hscr_height;
+	}
+	float HscrWf() const {
+		return hscr_width;
+	}
+	//v pixels, aspect ratio
+	void setResolution(int height, float ar) {
+		scr_height = height;
+		scr_width = int(std::round(height * ar));
+		hscr_height = scr_height / 2;
+		hscr_width = scr_width / 2;
+	}
 
 private:
 	XMVECTOR dir;
 	XMVECTOR left;
+
+	//v radians
+	float fov;
+	//v radians
+	float vfov;
+	int scr_height;
+	int hscr_height;
+	int scr_width;
+	int hscr_width;
 };

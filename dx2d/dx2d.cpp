@@ -20,7 +20,9 @@
 
 #pragma comment(lib, "d2d1.lib")
 
-
+#define FMT_UNICODE 0 //https://github.com/gabime/spdlog/issues/3251
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/basic_file_sink.h>
 #include "GJRenderer.h"
 #include "GJScene.h"
 #include "GJSimulation.h"
@@ -47,6 +49,8 @@ int WINAPI wWinMain(
 	_In_ int       nCmdShow
 )
 {
+	auto fileLogger = spdlog::basic_logger_mt("file_logger", "logs/output.log");
+	spdlog::set_default_logger(fileLogger);
 
 	// Initialize COM library
 	HRESULT hr = CoInitialize(NULL);
