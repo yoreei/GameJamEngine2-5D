@@ -174,6 +174,8 @@ struct GJScene {
 
 	/* 1 up, -1 down, 0 center */
 	float zDir = 0;
+	//v radians
+	//float zAngle = 0;
 	// only x and y are used
 	XMVECTOR position{ 0,0,0,0 };
 	const XMVECTOR& getDir() const {

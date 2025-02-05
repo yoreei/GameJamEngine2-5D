@@ -753,7 +753,9 @@ public:
 		for (int y = horizon + 1; y < scene->ScrH(); ++y) {
 			float y_t = (y - horizon) / (scene->ScrHf() - horizon - 1.f);
 
-			float rayZ = y_t * bottom;
+			float rayZOld = y_t * bottom;
+			float rayZ = std::tan((scene->getVfov() / 2.f) * (2.f * y / scene->ScrH() - 1.f));
+			spdlog::info("y: {}, rayZOld: {}, rayZ: {} \n", y, rayZOld, rayZ);
 			float d = scene->camHeight / rayZ; //< distance from scene->position to ray hit
 			//v   sin      = tan  * cos
 			float horWidth = horTan * d; //< half horizontal width (how many units we can see horizontally to the left of center in this scanline)
