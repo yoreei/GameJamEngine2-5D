@@ -82,6 +82,12 @@ public:
 			else if (wParam == 'S') {
 				scene.position = scene.position - scene.getDir() * 0.1f;
 			}
+			else if (wParam == 'Q') {
+				scene.camHeight += 0.5f;
+			}
+			else if (wParam == 'E') {
+				scene.camHeight -= 0.5f;
+			}
 			else if (wParam == VK_SPACE) {
 				castQLeap();
 			}

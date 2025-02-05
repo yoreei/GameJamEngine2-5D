@@ -144,8 +144,10 @@ struct GJScene {
 	void setFov(float newFov) {
 		fov = newFov;
 		vfov = fov;
-		maxZ = sin(vfov / 2.f);
-		minZ = -sin(vfov / 2.f);
+		//maxZ = sin(vfov / 2.f);
+		//minZ = -sin(vfov / 2.f);
+		maxZ = 1;
+		minZ = -1;
 	}
 
 	//std::array<int, 255> keybinds;

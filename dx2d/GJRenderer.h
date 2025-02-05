@@ -696,8 +696,8 @@ public:
 		// Sky
 
 		float t_horizon = scene->zDir / scene->minZ;
-		int horizon = scene->HscrHf() + t_horizon * scene->HscrHf();
-		horizon = std::clamp(horizon, 0, scene->ScrH() - 1);
+		int horizon = scene->HscrHf() + int(t_horizon * scene->HscrHf()) -1; //< from -1 to (scene->ScrH - 1)
+		//horizon = std::clamp(horizon, 0, scene->ScrH() - 1); //< todo delete?
 		int topBandHeight = 0.3f * scene->ScrHf();
 		int r_top = 200;
 		int g_top = 150;
@@ -744,9 +744,9 @@ public:
 		}
 
 
-		// Floor:
-		float bottom = std::sin(scene->getVfov() / 2.f); // todo move to scene
-		float horTan = std::tan(scene->getFov() / 2.f); // horizontal tan
+		//v Floor:
+		float bottom = std::sin(scene->getVfov() / 2.f); //< todo move to scene
+		float horTan = std::tan(scene->getFov() / 2.f); //< horizontal tan
 		float _x = 0.f;
 		float _y = 0.f;
 
@@ -754,16 +754,16 @@ public:
 			float y_t = (y - horizon) / (scene->ScrHf() - horizon - 1.f);
 
 			float rayZ = y_t * bottom;
-			float d = std::abs(scene->camHeight / rayZ); //< distance from scene->position to ray hit
+			float d = scene->camHeight / rayZ; //< distance from scene->position to ray hit
+			//v   sin      = tan  * cos
+			float horWidth = horTan * d; //< half horizontal width (how many units we can see horizontally to the left of center in this scanline)
 			for (int x = 0; x < scene->ScrW(); ++x) {
-				//v   sin    = tan  * cos
-				float horWidth = horTan * d; //< half horizontal width (how many units we can see horizontally to the left of center in this scanline)
 				float x_t = float(scene->HscrWf() - x) / scene->HscrWf(); // from 1 to -1
-				//float screenAngle = (scene->getFov() / 2.f) * x_t; // slight perspective warp at the left/right edges
-				float screenAngle = std::atan2f(horWidth * x_t, d); // works just as well as the above screenAngle
+				//float screenAngle = (scene->getFov() / 2.f) * x_t; // I think I see a very slight perspective warp at the left/right edges with this one
+				float screenAngle = std::atan2f(horWidth * x_t, d);
 				float angle = scene->getAngle() + screenAngle;
 
-				float perspCorrect = d / std::cosf(screenAngle); // completely messes things up
+				float perspCorrect = d / std::cosf(screenAngle);
 
 				_x = std::cosf(angle) * perspCorrect;
 				_y = std::sinf(angle) * perspCorrect;
