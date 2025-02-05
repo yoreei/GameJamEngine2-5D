@@ -400,7 +400,7 @@ public:
 		brush->SetColor(D2D1::ColorF{ 1.f, 1.f, 0.7, minimapAlpha });
 		XMVECTOR endV = posV + scene->getDir() * 20;
 		const float end_x = XMVectorGetX(endV);
-		const float end_y = XMVectorGetY(endV);
+		const float end_y = XMVectorGetY(endV); //< '-' because screen-space is inverted
 		pLowResRenderTarget->DrawLine(
 			D2D1_POINT_2F(pos_x, pos_y),
 			D2D1_POINT_2F(end_x, end_y),
@@ -745,9 +745,6 @@ public:
 
 
 		// Floor:
-		const UINT& texW = floorCPUTex.width;
-		const UINT& texH = floorCPUTex.height;
-
 		float bottom = std::sin(scene->getVfov() / 2.f); // todo move to scene
 		float horTan = std::tan(scene->getFov() / 2.f); // horizontal tan
 		float _x = 0.f;
@@ -758,15 +755,22 @@ public:
 
 			float rayZ = y_t * bottom;
 			float d = std::abs(scene->camHeight / rayZ); //< distance from scene->position to ray hit
-			//float posWhole;
-			//float posFract = std::modf(XMVectorGetY(scene->position), &posWhole);
-			_y = d - XMVectorGetY(scene->position); // warps perspective
 			for (int x = 0; x < scene->ScrW(); ++x) {
 				//v   sin    = tan  * cos
-				float horWidth = 2 * horTan * d; //< horizontal width (how many units we can see horizontally in this scanline)
-				float x_t = float(scene->HscrWf() - x) / scene->HscrWf();
-				_x = horWidth * x_t;
-				_x -= XMVectorGetX(scene->position);
+				float horWidth = horTan * d; //< half horizontal width (how many units we can see horizontally to the left of center in this scanline)
+				float x_t = float(scene->HscrWf() - x) / scene->HscrWf(); // from 1 to -1
+				//float screenAngle = (scene->getFov() / 2.f) * x_t; // slight perspective warp at the left/right edges
+				float screenAngle = std::atan2f(horWidth * x_t, d); // works just as well as the above screenAngle
+				float angle = scene->getAngle() + screenAngle;
+
+				float perspCorrect = d / std::cosf(screenAngle); // completely messes things up
+
+				_x = std::cosf(angle) * perspCorrect;
+				_y = std::sinf(angle) * perspCorrect;
+
+				// translate
+				_y += XMVectorGetY(scene->position);
+				_x += XMVectorGetX(scene->position);
 
 				//spdlog::info("x: {}, y: {}, _x: {}, _y: {}\n",x, y, _x, _y);
 				uint32_t sample = scene->sampleFloor(_x, _y);

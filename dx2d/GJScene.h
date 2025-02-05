@@ -94,6 +94,7 @@ struct GJScene {
 		setDir({ 0,-1,0,0 });
 		setFov(1.f); //70deg
 		setResolution(960, 1.f);
+		setAngle(1);
 	}
 	void loadMap(const std::string& fileName) {
 		std::string line;
@@ -176,12 +177,13 @@ struct GJScene {
 	const XMVECTOR& getDir() const {
 		return dir;
 	}
-	const XMVECTOR& getLeft() const {
-		return left;
-	}
+	// TODO DELETE
+	//const XMVECTOR& getLeft() const {
+	//	return left;
+	//}
 	void setDir(const XMVECTOR& newDir) {
 		dir = newDir;
-		left = XMVector3Cross(dir, { 0.f,0.f,1.f,0.f });
+		//left = XMVector3Cross(dir, { 0.f,0.f,1.f,0.f }); // todo delete
 	}
 	float camHeight = 0.5f;
 	//v radians
@@ -233,9 +235,22 @@ struct GJScene {
 		hscr_width = scr_width / 2;
 	}
 
+	//v radians
+	void setAngle(float _angle) {
+		angle = std::fmodf(_angle, 2 * std::numbers::pi);
+		dir = XMVECTOR{ std::cosf(angle), std::sinf(angle), 0.f, 0.f };
+		spdlog::info("angle: {}, dirx: {}, diry: {}\n", angle, XMVectorGetX(dir), XMVectorGetY(dir));
+	}
+
+	float getAngle() const {
+		return angle;
+	}
+
 private:
+	//v radians
+	float angle;
 	XMVECTOR dir;
-	XMVECTOR left;
+	//XMVECTOR left;
 
 	//v radians
 	float fov;

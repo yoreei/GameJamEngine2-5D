@@ -70,13 +70,11 @@ public:
 				return;
 			}
 
-			static XMVECTOR leftRot = XMQuaternionRotationAxis({ 0.f, 0.f, -1.f, 0.f }, std::numbers::pi / 8);
-			static XMVECTOR rightRot = XMQuaternionRotationAxis({ 0.f, 0.f, -1.f, 0.f }, -std::numbers::pi / 8);
 			if (wParam == VK_LEFT) {
-				scene.setDir(XMVector3Rotate(scene.getDir(), leftRot));
+				scene.setAngle(scene.getAngle() + 0.3f);
 			}
 			else if (wParam == VK_RIGHT) {
-				scene.setDir(XMVector3Rotate(scene.getDir(), rightRot));
+				scene.setAngle(scene.getAngle() - 0.3f);
 			}
 			else if (wParam == 'W') {
 				scene.position = scene.position + scene.getDir() * 0.1f;
