@@ -285,7 +285,6 @@ public:
 		//drawBorder();
 		(this->*drawCallTable[static_cast<size_t>(scene->state)])();
 
-
 		// draw low res rt to main rt
 		pLowResRenderTarget->EndDraw();
 
@@ -417,7 +416,7 @@ public:
 			float fixPersp = getPixelDir(x, OUT dir);
 			dist = scene->intersect(scene->position, dir);
 			float color = -(dist / MAXVIEWDIST) + 1.f;
-			brush->SetColor(D2D1::ColorF(color, color, color));
+			brush->SetColor(D2D1::ColorF(color, color, color, 0.4f));
 			dist = std::clamp(dist, 0.f, MAXVIEWDIST);
 			float lineH = scene->ScrHf() / (dist * fixPersp);
 			float midLine = scene->HscrHf(); // fix when implementing look up-down
@@ -428,6 +427,7 @@ public:
 	}
 
 	void drawScene() {
+		// * mode7 & sky
 		updateDrawBuffer();
 
 		D2D1_RECT_U destRect = { 0, 0, scene->ScrW(), scene->ScrH() };
@@ -442,7 +442,8 @@ public:
 			nullptr // Source rectangle (nullptr to use entire bitmap)
 		);
 
-		//drawWalls();
+		// * walls
+		drawWalls();
 	}
 
 	void drawUI() {
@@ -680,7 +681,7 @@ public:
 
 		//float t_horizon = scene->zDir / scene->minZ;
 		float t_horizon = scene->zDir / -0.4f;
-		int horizon = scene->HscrHf() + int(t_horizon * scene->HscrHf()) -1; //< from -1 to (scene->ScrH - 1)
+		int horizon = scene->HscrHf() + int(t_horizon * scene->HscrHf()) - 1; //< from -1 to (scene->ScrH - 1)
 		//horizon = std::clamp(horizon, 0, scene->ScrH() - 1); //< todo delete?
 		int topBandHeight = 0.3f * scene->ScrHf();
 		int r_top = 200;
@@ -735,15 +736,15 @@ public:
 		float _y = 0.f;
 		//float perspective = 0; // 0 to 1
 
-		int y = std::clamp(horizon + 1, 0, scene->ScrH() -1);
+		int y = std::clamp(horizon + 1, 0, scene->ScrH() - 1);
 		for (; y < scene->ScrH(); ++y) {
-			float zAngle = std::atan2f(screenDist, y - horizon - 1); // hor.angle of vision for pix x. 
-			float y_d = scene->camHeight * std::tanf(zAngle); // how far along the y plane does this scanline meet the floor plane (assuming we are at 0,0)
+			float zAngle = std::atan2f(screenDist, y - horizon - 1); // hor.angle of vision for pix y. 
+			float y_d = scene->camHeight * std::tanf(zAngle); // distance along y-plane that scanline meets floor-plane
 
 			//v   opposite = tan(a) * adj
 			float horWidth = horTan * y_d; //< half horizontal width (how many units we can see horizontally to the left of center in this scanline)
 			for (int x = 0; x < scene->ScrW(); ++x) {
-				float x_t = float(scene->HscrWf() - x) / scene->HscrWf(); // from 1 to -1
+				float x_t = (x - scene->HscrWf()) / scene->HscrWf(); // -1 (left) to 1 (right)
 				//float screenAngle = (scene->getFov() / 2.f) * x_t; // results in slight perspective warp
 				float screenAngle = std::atan2f(horWidth * x_t, y_d); //< hor.angle of vision for pix x. 
 				float angle = scene->getAngle() + screenAngle;
@@ -766,59 +767,6 @@ public:
 		}
 	}
 
-	//void oldFloor() {
-	//	const UINT& texW = floorCPUTex.width;
-	//	const UINT& texH = floorCPUTex.height;
-
-	//	float _x = 0.f;
-	//	float _y = 0.f;
-	//	float t_horizon = scene->zDir / scene->minZ;
-	//	int horizon = scene->HSCR + t_horizon * scene->HSCR;
-	//	horizon = std::clamp(horizon, 0, scene->SCR_WIDTH - 1);
-	//	float scale = 150;
-	//	XMVECTOR pos = scene->position * 10; // adjust scale for believable movement speed
-
-	//	//v turned out we don't need these?
-	//	//float zStart = scene->HSCR_F * std::abs(scene->zDir) + 1;
-	//	//float zEnd = scene->HSCR_F;
-	//	const float& cos = XMVectorGetX(scene->getDir());
-	//	const float& sin = XMVectorGetY(scene->getDir());
-
-	//	float z = 1;
-	//	for (int y = horizon; y < scene->SCR_WIDTH; ++y) {
-
-	//		//v turned out we don't need these?
-	//		//float t = float(y - horizon) / float(scene->SCR_WIDTH - horizon);
-	//		//float z = zStart + t * (zEnd - zStart);
-
-	//		//v `-horizon` makes sure texture does not appear to move when horizon changes. Not sure why `HSCR_F` worked so well 
-	//		//float _y = (y - horizon + scene->HSCR_F) / z;
-	//		//_y *= scale;
-	//		//_y -= XMVectorGetY(pos);
-	//		//_y = std::abs(fmod(_y, texH));
-
-	//		for (int x = 0; x < scene->SCR_WIDTH; ++x) {
-	//			_y = ((scene->SCR_WIDTH_F - x) * cos - (x)*sin) / z;
-	//			_y *= scale;
-	//			_y -= XMVectorGetY(pos);
-	//			_y = std::abs(fmod(_y, texH));
-
-	//			//_x = (scene->HSCR - x) / z;
-	//			_x = ((scene->SCR_WIDTH_F - x) * sin + (x)*cos) / z;
-	//			_x *= scale;
-	//			_x -= XMVectorGetX(pos);
-	//			_x = std::abs(fmod(_x, texW));
-	//			size_t pixId = floorCPUTex.getPixel(toId(_x), toId(_y));
-	//			uint8_t b = floorCPUTex.data[pixId];
-	//			uint8_t g = floorCPUTex.data[pixId + 1];
-	//			uint8_t r = floorCPUTex.data[pixId + 2];
-	//			uint8_t a = floorCPUTex.data[pixId + 3];
-	//			drawBuffer[y * scene->SCR_WIDTH + x] = (0xFF << 24) | (r << 16) | (g << 8) | b;
-	//		}
-	//		++z;
-	//	}
-
-	//}
 private:
 	void checkFailed(HRESULT hr, HWND hwnd, const std::string& message) {
 		if (FAILED(hr))

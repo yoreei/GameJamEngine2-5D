@@ -71,16 +71,16 @@ public:
 			}
 
 			if (wParam == VK_LEFT) {
-				scene.setAngle(scene.getAngle() + 0.3f);
-			}
-			else if (wParam == VK_RIGHT) {
 				scene.setAngle(scene.getAngle() - 0.3f);
 			}
+			else if (wParam == VK_RIGHT) {
+				scene.setAngle(scene.getAngle() + 0.3f);
+			}
 			else if (wParam == 'W') {
-				scene.position = scene.position + scene.getDir() * 0.1f;
+				scene.position = scene.position + scene.getDir() * 0.3f;
 			}
 			else if (wParam == 'S') {
-				scene.position = scene.position - scene.getDir() * 0.1f;
+				scene.position = scene.position - scene.getDir() * 0.3f;
 			}
 			else if (wParam == 'Q') {
 				scene.camHeight += 0.2f;
