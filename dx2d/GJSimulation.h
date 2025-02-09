@@ -83,19 +83,19 @@ public:
 				scene.position = scene.position - scene.getDir() * 0.1f;
 			}
 			else if (wParam == 'Q') {
-				scene.camHeight += 0.5f;
+				scene.camHeight += 0.2f;
 			}
 			else if (wParam == 'E') {
-				scene.camHeight -= 0.5f;
+				scene.camHeight -= 0.2f;
 			}
 			else if (wParam == VK_SPACE) {
 				castQLeap();
 			}
 			else if (wParam == VK_UP) {
-				scene.zDir = std::clamp(scene.zDir + 0.1f, scene.minZ, scene.maxZ);
+				scene.zDir = std::clamp(scene.zDir + 0.05f, scene.minZ, scene.maxZ);
 			}
 			else if (wParam == VK_DOWN) {
-				scene.zDir = std::clamp(scene.zDir - 0.1f, scene.minZ, scene.maxZ);
+				scene.zDir = std::clamp(scene.zDir - 0.05f, scene.minZ, scene.maxZ);
 			}
 
 

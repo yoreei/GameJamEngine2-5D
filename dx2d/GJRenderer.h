@@ -22,6 +22,8 @@ using Microsoft::WRL::ComPtr;
 
 #include "GJScene.h"
 
+constexpr float PI = std::numbers::pi;
+
 constexpr size_t toId(auto someEnum) {
 	return static_cast<size_t>(someEnum);
 }
@@ -413,7 +415,7 @@ public:
 		XMVECTOR dir;
 		for (int x = 0; x < scene->ScrW(); ++x) {
 			float fixPersp = getPixelDir(x, OUT dir);
-			dist = intersect(scene->position, dir);
+			dist = scene->intersect(scene->position, dir);
 			float color = -(dist / MAXVIEWDIST) + 1.f;
 			brush->SetColor(D2D1::ColorF(color, color, color));
 			dist = std::clamp(dist, 0.f, MAXVIEWDIST);
@@ -631,25 +633,6 @@ public:
 		checkFailed(hr, hWnd, "createBitmapFromWicBitmap failed");
 	}
 
-	float intersect(const XMVECTOR& origin, const XMVECTOR& dir) {
-		BoundingBox b{ XMFLOAT3{0,0,0}, XMFLOAT3{0.5,0.5,0} };
-		float dist = FLT_MAX;
-		float bestDist = FLT_MAX;
-
-		for (int y = 0; y < scene->height; ++y) {
-			for (int x = 0; x < scene->width; ++x) {
-				if (scene->get(x, y) != '#') { continue; }
-				b.Center = XMFLOAT3{ static_cast<float>(x) + 0.5f,static_cast<float>(y) + 0.5f,0 };
-				bool intersects = b.Intersects(origin, dir, OUT dist);
-				if (intersects) {
-					bestDist = std::min(bestDist, dist);
-				}
-
-			}
-
-		}
-		return bestDist;
-	}
 
 	void initDrawBuffer(const std::wstring& filePath) {
 		// CPU Side: 
@@ -695,7 +678,8 @@ public:
 	void updateDrawBuffer() {
 		// Sky
 
-		float t_horizon = scene->zDir / scene->minZ;
+		//float t_horizon = scene->zDir / scene->minZ;
+		float t_horizon = scene->zDir / -0.4f;
 		int horizon = scene->HscrHf() + int(t_horizon * scene->HscrHf()) -1; //< from -1 to (scene->ScrH - 1)
 		//horizon = std::clamp(horizon, 0, scene->ScrH() - 1); //< todo delete?
 		int topBandHeight = 0.3f * scene->ScrHf();
@@ -715,7 +699,7 @@ public:
 		float Nf = 1 + log(1.0f / topBandHeight) / log(f);
 		int N = std::ceil(Nf);
 
-		int yPos = horizon;
+		int yPos = std::clamp(horizon, 0, scene->ScrH() - 1);
 		int bandHeight;
 		float bandHeightF;
 		for (int i = N; i >= 0 && yPos >= 0; --i)
@@ -745,27 +729,27 @@ public:
 
 
 		//v Floor:
-		float bottom = std::sin(scene->getVfov() / 2.f); //< todo move to scene
 		float horTan = std::tan(scene->getFov() / 2.f); //< horizontal tan
+		float screenDist = scene->HscrHf() / scene->getVfov();
 		float _x = 0.f;
 		float _y = 0.f;
+		//float perspective = 0; // 0 to 1
 
-		for (int y = horizon + 1; y < scene->ScrH(); ++y) {
-			float y_t = (y - horizon) / (scene->ScrHf() - horizon - 1.f);
+		int y = std::clamp(horizon + 1, 0, scene->ScrH() -1);
+		for (; y < scene->ScrH(); ++y) {
+			float zAngle = std::atan2f(screenDist, y - horizon - 1); // hor.angle of vision for pix x. 
+			float y_d = scene->camHeight * std::tanf(zAngle); // how far along the y plane does this scanline meet the floor plane (assuming we are at 0,0)
 
-			float rayZOld = y_t * bottom;
-			float rayZ = std::tan((scene->getVfov() / 2.f) * (2.f * y / scene->ScrH() - 1.f));
-			spdlog::info("y: {}, rayZOld: {}, rayZ: {} \n", y, rayZOld, rayZ);
-			float d = scene->camHeight / rayZ; //< distance from scene->position to ray hit
-			//v   sin      = tan  * cos
-			float horWidth = horTan * d; //< half horizontal width (how many units we can see horizontally to the left of center in this scanline)
+			//v   opposite = tan(a) * adj
+			float horWidth = horTan * y_d; //< half horizontal width (how many units we can see horizontally to the left of center in this scanline)
 			for (int x = 0; x < scene->ScrW(); ++x) {
 				float x_t = float(scene->HscrWf() - x) / scene->HscrWf(); // from 1 to -1
-				//float screenAngle = (scene->getFov() / 2.f) * x_t; // I think I see a very slight perspective warp at the left/right edges with this one
-				float screenAngle = std::atan2f(horWidth * x_t, d);
+				//float screenAngle = (scene->getFov() / 2.f) * x_t; // results in slight perspective warp
+				float screenAngle = std::atan2f(horWidth * x_t, y_d); //< hor.angle of vision for pix x. 
 				float angle = scene->getAngle() + screenAngle;
 
-				float perspCorrect = d / std::cosf(screenAngle);
+				//v   hyp		   = adj / cos(a)
+				float perspCorrect = y_d / std::cosf(screenAngle);
 
 				_x = std::cosf(angle) * perspCorrect;
 				_y = std::sinf(angle) * perspCorrect;

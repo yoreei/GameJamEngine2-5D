@@ -199,12 +199,55 @@ struct GJScene {
 		return vfov;
 	}
 
+	float intersect(const XMVECTOR& origin, const XMVECTOR& dir) const {
+		BoundingBox b{ XMFLOAT3{0,0,0}, XMFLOAT3{0.5,0.5,0} };
+		float dist = FLT_MAX;
+		float bestDist = FLT_MAX;
+
+		for (int y = 0; y < height; ++y) {
+			for (int x = 0; x < width; ++x) {
+				if (get(x, y) != '#') { continue; }
+				b.Center = XMFLOAT3{ static_cast<float>(x) + 0.5f,static_cast<float>(y) + 0.5f,0 };
+				bool intersects = b.Intersects(origin, dir, OUT dist);
+				if (intersects) {
+					bestDist = std::min(bestDist, dist);
+				}
+
+			}
+
+		}
+		return bestDist;
+	}
 	//v ABGR
 	uint32_t sampleFloor(float x, float y) const {
 		uint8_t c = int(std::floor(x)) + int(std::floor(y));
 		c %= 2;
 		c *= 255;
-		return (0xFF << 24) | (c << 16) | (c << 8) | (c);
+
+		if (x >= width || y >= height || x <= 0 || y <= 0) {
+			return (0xFF << 24) | (c << 16) | (c << 8) | (c / 2);
+		}
+
+		bool wall = XMVector4Less(XMVectorAbs(position - XMVECTOR{ x,y + 3.f,0.f,0.f }), XMVECTOR{0.5f,0.5f,0.5f,0.5f});
+		if (get(size_t(x), size_t(y)) == '#')
+		{
+			return 0xFFAAAAFF;
+		}
+
+		bool less = XMVector4Less(XMVectorAbs(position - XMVECTOR{ x,y + 3.f,0.f,0.f }), XMVECTOR{0.5f,0.5f,0.5f,0.5f});
+		if (less)
+		{
+			return 0xFFAAFFAA;
+		}
+
+		less = XMVector4Less(XMVectorAbs(position - XMVECTOR{ x,y,0.f,0.f }), XMVECTOR{0.5f,0.5f,0.5f,0.5f});
+		if (less)
+		{
+			return 0xFFFFAAAA;
+		}
+		else {
+			return (0xFF << 24) | (c << 16) | (c << 8) | (c);
+		}
 
 	}
 	int ScrH() const {
