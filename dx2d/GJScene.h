@@ -95,6 +95,7 @@ struct GJScene {
 		setFov(1.f); //70deg
 		setResolution(960, 1.f);
 		setAngle(1);
+		setPitch(0);
 	}
 	void loadMap(const std::string& fileName) {
 		std::string line;
@@ -172,8 +173,6 @@ struct GJScene {
 	std::array<Entity, 25> obstacles{};
 	static inline Entity emptyEntity;
 
-	/* 1 up, -1 down, 0 center */
-	float zDir = 0;
 	//v radians
 	//float zAngle = 0;
 	// only x and y are used
@@ -197,6 +196,15 @@ struct GJScene {
 	//v radians
 	const float getVfov() const {
 		return vfov;
+	}
+
+	void setPitch(float _pitch) {
+		pitch = _pitch;
+		//float t_horizon = pitch / -0.4f; // todo delete this
+		horizon = HscrHf() + int(-pitch * HscrHf()) - 1; //< from -1 to (scene->ScrH - 1)
+	}
+	float getPitch() const {
+		return pitch;
 	}
 
 	float intersect(const XMVECTOR& origin, const XMVECTOR& dir) const {
@@ -228,19 +236,19 @@ struct GJScene {
 			return (0xFF << 24) | (c << 16) | (c << 8) | (c / 2);
 		}
 
-		bool wall = XMVector4Less(XMVectorAbs(position - XMVECTOR{ x,y + 3.f,0.f,0.f }), XMVECTOR{0.5f,0.5f,0.5f,0.5f});
+		bool wall = XMVector4Less(XMVectorAbs(position - XMVECTOR{ x,y + 3.f,0.f,0.f }), XMVECTOR{ 0.5f,0.5f,0.5f,0.5f });
 		if (get(size_t(x), size_t(y)) == '#')
 		{
 			return 0xFFAAAAFF;
 		}
 
-		bool less = XMVector4Less(XMVectorAbs(position - XMVECTOR{ x,y + 3.f,0.f,0.f }), XMVECTOR{0.5f,0.5f,0.5f,0.5f});
+		bool less = XMVector4Less(XMVectorAbs(position - XMVECTOR{ x,y + 3.f,0.f,0.f }), XMVECTOR{ 0.5f,0.5f,0.5f,0.5f });
 		if (less)
 		{
 			return 0xFFAAFFAA;
 		}
 
-		less = XMVector4Less(XMVectorAbs(position - XMVECTOR{ x,y,0.f,0.f }), XMVECTOR{0.5f,0.5f,0.5f,0.5f});
+		less = XMVector4Less(XMVectorAbs(position - XMVECTOR{ x,y,0.f,0.f }), XMVECTOR{ 0.5f,0.5f,0.5f,0.5f });
 		if (less)
 		{
 			return 0xFFFFAAAA;
@@ -293,6 +301,10 @@ struct GJScene {
 		return angle;
 	}
 
+	int getHorizon() const {
+		return horizon;
+	}
+
 private:
 	//v radians
 	float angle;
@@ -307,4 +319,8 @@ private:
 	int hscr_height;
 	int scr_width;
 	int hscr_width;
+
+	/* 1 up, -1 down, 0 center */
+	float pitch = 0;
+	int horizon;
 };

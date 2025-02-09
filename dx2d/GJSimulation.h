@@ -92,10 +92,10 @@ public:
 				castQLeap();
 			}
 			else if (wParam == VK_UP) {
-				scene.zDir = std::clamp(scene.zDir + 0.05f, scene.minZ, scene.maxZ);
+				scene.setPitch(scene.getPitch() + 0.1f);
 			}
 			else if (wParam == VK_DOWN) {
-				scene.zDir = std::clamp(scene.zDir - 0.05f, scene.minZ, scene.maxZ);
+				scene.setPitch(scene.getPitch() - 0.1f);
 			}
 
 

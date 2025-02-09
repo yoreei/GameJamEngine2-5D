@@ -409,19 +409,25 @@ public:
 
 	}
 
+
+	//v height in world units
+	void drawWall(float x, float dist, float height, float color) {
+		const float& FOCAL_LENGTH = scene->HscrHf();
+		float pixHeight = (FOCAL_LENGTH * height) / dist;
+		brush->SetColor(D2D1::ColorF(color, color, color, 0.5f));
+		float pixBottom =scene->getHorizon() + (FOCAL_LENGTH * (scene->camHeight )) / dist;
+		pLowResRenderTarget->DrawLine(D2D1_POINT_2F(x, pixBottom), D2D1_POINT_2F(x, pixBottom - pixHeight), brush, 1.f);
+	}
+
 	void drawWalls() {
 		float dist;
 		XMVECTOR dir;
 		for (int x = 0; x < scene->ScrW(); ++x) {
 			float fixPersp = getPixelDir(x, OUT dir);
 			dist = scene->intersect(scene->position, dir);
-			float color = -(dist / MAXVIEWDIST) + 1.f;
-			brush->SetColor(D2D1::ColorF(color, color, color, 0.4f));
 			dist = std::clamp(dist, 0.f, MAXVIEWDIST);
-			float lineH = scene->ScrHf() / (dist * fixPersp);
-			float midLine = scene->HscrHf(); // fix when implementing look up-down
-			pLowResRenderTarget->DrawLine(D2D1_POINT_2F(static_cast<float>(x), midLine + lineH), D2D1_POINT_2F(static_cast<float>(x), midLine - lineH), brush, 1.f);
-
+			float color = -(dist / MAXVIEWDIST) + 1.f;
+			drawWall(x, dist * fixPersp, 1.f, color);
 		}
 
 	}
@@ -680,8 +686,6 @@ public:
 		// Sky
 
 		//float t_horizon = scene->zDir / scene->minZ;
-		float t_horizon = scene->zDir / -0.4f;
-		int horizon = scene->HscrHf() + int(t_horizon * scene->HscrHf()) - 1; //< from -1 to (scene->ScrH - 1)
 		//horizon = std::clamp(horizon, 0, scene->ScrH() - 1); //< todo delete?
 		int topBandHeight = 0.3f * scene->ScrHf();
 		int r_top = 200;
@@ -700,7 +704,7 @@ public:
 		float Nf = 1 + log(1.0f / topBandHeight) / log(f);
 		int N = std::ceil(Nf);
 
-		int yPos = std::clamp(horizon, 0, scene->ScrH() - 1);
+		int yPos = std::clamp(scene->getHorizon(), 0, scene->ScrH() - 1);
 		int bandHeight;
 		float bandHeightF;
 		for (int i = N; i >= 0 && yPos >= 0; --i)
@@ -736,9 +740,9 @@ public:
 		float _y = 0.f;
 		//float perspective = 0; // 0 to 1
 
-		int y = std::clamp(horizon + 1, 0, scene->ScrH() - 1);
+		int y = std::clamp(scene->getHorizon() + 1, 0, scene->ScrH() - 1);
 		for (; y < scene->ScrH(); ++y) {
-			float zAngle = std::atan2f(screenDist, y - horizon - 1); // hor.angle of vision for pix y. 
+			float zAngle = std::atan2f(screenDist, y - scene->getHorizon() - 1); // hor.angle of vision for pix y. 
 			float y_d = scene->camHeight * std::tanf(zAngle); // distance along y-plane that scanline meets floor-plane
 
 			//v   opposite = tan(a) * adj
