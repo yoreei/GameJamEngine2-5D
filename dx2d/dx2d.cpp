@@ -105,41 +105,52 @@ int WINAPI wWinMain(
 
 	ShowWindow(hwnd, nCmdShow);
 
-	const GJScene* scene = simulation.getScene();
-	renderer.init(hwnd, scene);
+	GJScene prevScene{};
+	GJScene interpScene{};
+	const GJScene* nextScene = simulation.getScene();
+	renderer.init(hwnd, &interpScene);
 
 	// Message loop
 	MSG msg = { };
-
-	// Desired frame rate
-	const double fps = 30.0;
-	std::chrono::duration<double, std::milli> frameDuration{ 1000.f / fps };
-
-	bool running = true;
-	auto lastTime = std::chrono::high_resolution_clock::now();
-	GNow = std::chrono::high_resolution_clock::now();
-	std::chrono::duration<double, std::milli> delta = GNow - lastTime;
-	while (running) {
-
+	bool quit = false;
+	Time currentTime = getTime();
+	Seconds accumulator{ 0 };
+	Seconds dt{ 0.01 };
+	while (!quit)
+	{
+		// Process OS messages once per frame
 		while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 		{
-			if (msg.message == WM_QUIT) {
-				running = false;
+			if (msg.message == WM_QUIT)
+			{
+				quit = true;
 				break;
 			}
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
-		GNow = std::chrono::high_resolution_clock::now();
-		delta = GNow - lastTime;
-		if (delta < frameDuration) {
-			continue;
+
+		// Now run the rest of your game loop:
+		Time newTime = getTime();
+		Seconds frameTime = newTime - currentTime;
+		if (frameTime > Seconds{ 0.25 })
+			frameTime = Seconds{ 0.25 };
+		currentTime = newTime;
+
+		accumulator += frameTime;
+
+		while (accumulator >= dt)
+		{
+			prevScene = *nextScene;
+			simulation.tick(dt);
+			GEngineTime += dt;
+			accumulator -= dt;
 		}
-		else {
-			simulation.tick(frameDuration);
-			renderer.draw(frameDuration);
-			lastTime = GNow;
-		}
+
+		const float alpha = accumulator / dt;
+		interpScene.interpolate(prevScene, *nextScene, alpha);
+
+		renderer.draw(dt);
 	}
 
 	CoUninitialize();

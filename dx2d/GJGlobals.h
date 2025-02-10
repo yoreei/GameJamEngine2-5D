@@ -1,10 +1,14 @@
 #pragma once
 #include <chrono>
 
-std::chrono::time_point<std::chrono::high_resolution_clock> GNow;
-std::chrono::time_point<std::chrono::high_resolution_clock> GGameStart;
+using Time = std::chrono::time_point<std::chrono::high_resolution_clock>;
+using Milli = std::chrono::duration<double, std::milli>;
+using Seconds = std::chrono::duration<double, std::ratio<1>>;
 
+Seconds GEngineTime{ 0 };
+//Time GNow;
+//Time GGameStart;
 
-auto getTime() {
+Time getTime() {
 	return std::chrono::high_resolution_clock::now();
 }

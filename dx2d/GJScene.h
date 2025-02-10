@@ -26,57 +26,32 @@ enum class EntityType {
 	EnemyEntity4
 };
 
-enum class Belonging {
-	Player = 0,
-	CPU
-};
-
-vec3 vec3op(const vec3& v, float(*op)(float)) {
-	return vec3{
-		op(v.e[0]),
-		op(v.e[1]),
-		op(v.e[2])
-	};
-}
-
 struct Entity {
-	uint16_t health = 1;
-	uint16_t size = 2;
-	vec3 momentum;
-	vec3 getPos() const {
-		vec3 val = vec3op(position, std::floor);
-		return val;
-	}
-	void moveBy(const vec3& by) {
+	void moveBy(const XMVECTOR& by) {
 		position += by;
 	}
-	//const vec3& getRawPos() {
-	//	return position;
-	//}
-	void setPos(const vec3& newPos) {
+	void setPos(const XMVECTOR& newPos) {
 		position = newPos;
 	}
 	void setX(float x) {
-		position.e[0] = x;
+		XMVectorSetX(position, x);
 	}
 	void setY(float y) {
-		position.e[1] = y;
+		XMVectorSetY(position, y);
 	}
+	void interpolate(const Entity& e1, const Entity& e2, float alpha) {
+		size = e1.size * (1.f - alpha) + e2.size * alpha;
+		momentum = XMVector4Normalize(XMVectorLerp(e1.momentum, e2.momentum, alpha));
+		position = XMVector4Normalize(XMVectorLerp(e1.position, e2.position, alpha));
+	}
+public:
+	//v * Non-Interpolatable:
+	uint16_t health = 1;
+	//v * Interpolatable:
+	uint16_t size = 2;
+	XMVECTOR momentum{};
+	XMVECTOR position{};
 private:
-	vec3 position;
-	//Belonging belonging = Belonging::CPU;
-	//uint8_t factionId = 0;
-	//uint32_t maxHealth = 1;
-	//uint32_t power = 1;
-	//uint32_t maxPower = 1;
-	//std::bitset<32> powerUps;
-	//std::vector<size_t> bitmapIds{};
-	//Animation animation = Animation::Idle;
-	//vec3 direction;
-};
-
-class Obstacle {
-
 };
 
 enum class State {
@@ -88,6 +63,7 @@ enum class State {
 	WIN,
 	size
 };
+
 struct GJScene {
 	GJScene() {
 		loadMap(mapFile);
@@ -126,69 +102,30 @@ struct GJScene {
 	}
 
 	void resetEntities() {
-		entities.fill(GJScene::emptyEntity);
+		entities.fill(Entity{});
 		for (int i = 0; i < entities.size(); ++i) {
 			entities[i].health = 1;
 			entities[i].size = 2;
-			entities[i].setPos(vec3{ 180.f, 240.f, 0.f });
+			entities[i].setPos({ 180.f, 240.f, 0.f, 0.f });
 		}
-		//keybinds['Q'] = 0;
-		//keybinds['A'] = 0;
-		//keybinds['W'] = 0;
-		//keybinds['S'] = 0;
 	}
 
 	void resetObstacles() {
-		obstacles.fill(GJScene::emptyEntity);
+		obstacles.fill(Entity{});
 	}
 
 	void setFov(float newFov) {
 		fov = newFov;
 		vfov = fov;
-		//maxZ = sin(vfov / 2.f);
-		//minZ = -sin(vfov / 2.f);
-		maxZ = 1;
-		minZ = -1;
 	}
 
-	//std::array<int, 255> keybinds;
-	//Entity playerController;
-	//float fov = 1.22f; //70deg
-	float maxZ;
-	float minZ;
-	//XMVECTOR viewAngleQuatL = XMQuaternionRotationAxis({0,0,1,0}, std::numbers::pi / 5);
-	//XMVECTOR viewAngleQuatR = XMQuaternionInverse(viewAngleQuatL);
-	std::string map;
-	uint64_t width = 0;
-	uint64_t height = 0;
-	std::string mapFile = "assets/map1.txt";
-	State state = State::MAINMENU;
-	bool explodeCd = false;
-	bool qLeapCd = false;
-	bool qLeapActive = false;
-	uint64_t hiScore = 0;
-	uint64_t points = 100;
-	//v entities move
-	std::array<Entity, 4> entities{};
-	std::array<Entity, 25> obstacles{};
-	static inline Entity emptyEntity;
-
-	//v radians
-	//float zAngle = 0;
-	// only x and y are used
-	XMVECTOR position{ 0,0,0,0 };
 	const XMVECTOR& getDir() const {
 		return dir;
 	}
-	// TODO DELETE
-	//const XMVECTOR& getLeft() const {
-	//	return left;
-	//}
+
 	void setDir(const XMVECTOR& newDir) {
 		dir = newDir;
-		//left = XMVector3Cross(dir, { 0.f,0.f,1.f,0.f }); // todo delete
 	}
-	float camHeight = 0.5f;
 	//v radians
 	const float getFov() const {
 		return fov;
@@ -305,22 +242,60 @@ struct GJScene {
 		return horizon;
 	}
 
-private:
-	//v radians
-	float angle;
-	XMVECTOR dir;
-	//XMVECTOR left;
+	void interpolate(const GJScene& s1, const GJScene& s2, float alpha) {
+		//v * Public Interpolatable (1)
+		for (int i = 0; i < entities.size(); ++i) {
+			entities[i].interpolate(s1.entities[i], s2.entities[i], alpha);
+		}
+		//v * Public Interpolatable (2)
+		for (int i = 0; i < obstacles.size(); ++i) {
+			obstacles[i].interpolate(s1.obstacles[i], s2.obstacles[i], alpha);
+		}
+		//v * Public Interpolatable (3)
+		position = XMVectorLerp(s1.position, s2.position, alpha);
+		//v * Public Interpolatable (4)
+		camHeight = s1.camHeight * (1.f - alpha) + s2.camHeight * alpha;
 
-	//v radians
-	float fov;
-	//v radians
-	float vfov;
+		//v * Private Interpolatable (1)
+		dir = XMVector4Normalize(XMVectorLerp(s1.dir, s2.dir, alpha));
+		//v * Private Interpolatable (2)
+		angle = s1.angle * (1.f - alpha) + s2.angle * alpha;
+		//v * Private Interpolatable (3)
+		pitch = s1.pitch * (1.f - alpha) + s2.pitch * alpha;
+		//v * Private Interpolatable (4)
+		horizon = s1.horizon * (1.f - alpha) + s2.horizon * alpha;
+	}
+public:
+	//v * Non-interpolatable:
+	std::string map;
+	uint64_t width = 0;
+	uint64_t height = 0;
+	std::string mapFile = "assets/map1.txt";
+	State state = State::MAINMENU;
+	bool explodeCd = false;
+	bool qLeapCd = false;
+	bool qLeapActive = false;
+	uint64_t hiScore = 0;
+	uint64_t points = 100;
+
+	//v * Interpolatable (4):
+	std::array<Entity, 4> entities{}; //< controlable
+	std::array<Entity, 25> obstacles{};
+	XMVECTOR position{ 0,0,0,0 }; //< only x and y are used
+	float camHeight = 0.5f;
+
+private:
+	//v * Non-Interpolatable:
+	float fov; //< radians
+	float vfov; //< radians
 	int scr_height;
 	int hscr_height;
 	int scr_width;
 	int hscr_width;
 
-	/* 1 up, -1 down, 0 center */
-	float pitch = 0;
+	//v * Interpolatable (4):
+	XMVECTOR dir;
+	float angle; //< radians
+	float pitch = 0; //< radians
 	int horizon;
 };

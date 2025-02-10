@@ -485,8 +485,8 @@ public:
 			}
 		}
 
-		vec3 center{ 180.f, 180.f, 0.f };
-		obstacles[id].momentum = center - obstacles[id].getPos();
+		XMVECTOR center{ 180.f, 180.f, 0.f, 0.f };
+		obstacles[id].momentum = center - obstacles[id].position;
 		obstacles[id].momentum = unit_vector(obstacles[id].momentum);
 
 		static std::uniform_int_distribution<uint16_t> sizeDist(7, 11);
@@ -495,15 +495,15 @@ public:
 	}
 
 	bool isCollision(const Entity& e1, const Entity& e2, float cheatParam = 0.f) {
-		vec3 delta = e1.getPos() - e2.getPos();
-		//vec3 delta = e1.position - e2.position;
-		float collisionLim = e1.size + e2.size - cheatParam;
-		if (std::abs(delta.e[0]) < collisionLim) {
-			if (std::abs(delta.e[1]) < collisionLim) {
-				return true;
-			}
+		XMVECTOR delta = XMVectorAbs(e1.position - e2.position);
+		float lim = e1.size + e2.size - cheatParam;
+		uint32_t compareResult = 0;
+		if (XMComparisonAllFalse(XMVectorGreaterR(&compareResult, delta, XMVECTOR{ lim, lim, lim, lim }))) {
+			return true;
 		}
-		return false;
+		else {
+			return false;
+		}
 	}
 
 	uint64_t readHiScore() {
