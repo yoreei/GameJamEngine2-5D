@@ -1,6 +1,4 @@
 // dx2d.cpp : Defines the entry point for the application.
-//
-
 
 #define NOMINMAX //< remove min and max definitions from windows
 #include <SDKDDKVer.h>
@@ -17,12 +15,14 @@
 #include <d2d1.h>
 #include <tchar.h>
 #include "Resource.h"
+#include "common/cpp3rdParty.h"
 
 #pragma comment(lib, "d2d1.lib")
 
 #define FMT_UNICODE 0 //https://github.com/gabime/spdlog/issues/3251
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
+
 #include "GJRenderer.h"
 #include "GJScene.h"
 #include "GJSimulation.h"
@@ -31,6 +31,44 @@
 GJSimulation simulation;
 GJRenderer renderer;
 
+/// \return true if application should continue, false if application should stop
+bool processPendingOsMessages() {
+	MSG msg = { };
+	while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+	{
+		// WM_QUIT will not be dispatched to WindowProc, must handle it here:
+		if (msg.message == WM_QUIT)
+		{
+			std::cout << "PeekMessage got WM_QUIT, quitting...\n";
+			return false;
+		}
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+	}
+	return true;
+
+}
+
+void enableConsole()
+{
+	AllocConsole();
+
+	// Redirect stdout
+	FILE* fpOut;
+	freopen_s(&fpOut, "CONOUT$", "w", stdout);
+
+	// Redirect stderr
+	FILE* fpErr;
+	freopen_s(&fpErr, "CONOUT$", "w", stderr);
+
+	// Redirect stdin (optional)
+	FILE* fpIn;
+	freopen_s(&fpIn, "CONIN$", "r", stdin);
+
+	// Optional: set unbuffered mode
+	setvbuf(stdout, NULL, _IONBF, 0);
+	setvbuf(stderr, NULL, _IONBF, 0);
+}
 
 // Forward declarations of functions
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -49,6 +87,8 @@ int WINAPI wWinMain(
 	_In_ int       nCmdShow
 )
 {
+	enableConsole();
+
 	auto fileLogger = spdlog::basic_logger_mt("file_logger", "logs/output.log");
 	spdlog::set_default_logger(fileLogger);
 
@@ -78,14 +118,19 @@ int WINAPI wWinMain(
 	}
 
 	// Create the window
+	bool fullscreen = true;
 	int screenWidth = GetSystemMetrics(SM_CXSCREEN);
 	int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+	if (!fullscreen) {
+		screenWidth /= 2;
+		screenHeight /= 2;
+	}
 
 	HWND hwnd = CreateWindowEx(
 		0,                              // Optional window styles.
 		CLASS_NAME,                     // Window class
 		L"Game Jam Engine", // Window text
-		WS_POPUP,                       // Window style set to WS_POPUP for borderless
+		fullscreen ? WS_POPUP : WS_OVERLAPPEDWINDOW,                       // Window style set to WS_POPUP for borderless
 
 		// Size and position set to cover the entire screen
 		0, 0, screenWidth, screenHeight,
@@ -106,60 +151,44 @@ int WINAPI wWinMain(
 	ShowWindow(hwnd, nCmdShow);
 
 	GJScene prevScene{};
-	GJScene interpScene{};
-	const GJScene* nextScene = simulation.getScene();
-	renderer.init(hwnd, &interpScene);
+	GameplayState gameplayState{};
+	renderer.init(hwnd, &gameplayState);
+	simulation.init(&gameplayState, "../assets/map1.txt");
 
 	// Message loop
-	MSG msg = { };
-	bool quit = false;
-	Time currentTime = getTime();
+	TimePoint currentTime = getTimePoint();
 	Seconds accumulator{ 0 };
-	Seconds dt{ 0.01 };
-	while (!quit)
+	const Seconds deltaTime{ 0.01 };
+	const Seconds MAX_FRAMETIME{ 0.25 };
+
+	// Game Loop based on https://gafferongames.com/post/fix_your_timestep/
+	while (processPendingOsMessages())
 	{
-		// Process OS messages once per frame
-		while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-		{
-			if (msg.message == WM_QUIT)
-			{
-				quit = true;
-				break;
-			}
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-		}
-
-		// Now run the rest of your game loop:
-		Time newTime = getTime();
+		TimePoint newTime = getTimePoint();
 		Seconds frameTime = newTime - currentTime;
-		if (frameTime > Seconds{ 0.25 })
-			frameTime = Seconds{ 0.25 };
-		currentTime = newTime;
+		frameTime = std::min(frameTime, MAX_FRAMETIME);
 
+		currentTime = newTime;
 		accumulator += frameTime;
 
-		while (accumulator >= dt)
+		for (;accumulator >= deltaTime; accumulator -= deltaTime)
 		{
-			prevScene = *nextScene;
-			simulation.tick(dt);
-			GEngineTime += dt;
-			accumulator -= dt;
+			prevScene = simulation.getScene(); // copy
+			simulation.tick(deltaTime);
 		}
 
-		const float alpha = accumulator / dt;
-		interpScene.interpolate(prevScene, *nextScene, alpha);
-
-		renderer.draw(dt);
+		const float alpha = accumulator / deltaTime;
+		renderer.interpolate(prevScene, simulation.getScene(), alpha);
+		renderer.draw(deltaTime);
 	}
 
 	CoUninitialize();
+	std::cout << "Press Enter to exit\n";
+	std::cin.get();
 	return 0;
 }
 
-
-
-// Window Procedure to handle messages
+// Window Procedure to handle messages for the main window
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg)

@@ -29,23 +29,54 @@ public:
 			throw std::runtime_error("");
 		}
 
-		lastExplode = getTime();
-
 		audioEngine = irrklang::createIrrKlangDevice();
 		if (!audioEngine) {
 			MessageBox(NULL, L"Could not initialize audio engine.", L"Error", MB_OK);
 		}
 
-		//audioEngine->stopAllSounds();
-		//auto music = audioEngine->play2D("assets/ingame.mp3", true, false, true);
-		//if (!music) {
-		//	MessageBox(NULL, L"Could not play ingame.mp3", L"Error", MB_OK);
-		//}
+		// disabling sound for debug because annoying
+		if (!DEBUG) {
+			audioEngine->stopAllSounds();
+			auto music = audioEngine->play2D("assets/ingame.mp3", true, false, true);
+			if (!music) {
+				MessageBox(NULL, L"Could not play ingame.mp3", L"Error", MB_OK);
+			}
+		}
+	}
+
+	void loadMap(const std::string& fileName) {
+		gameplayState->mapFile = fileName;
+		std::string line;
+		std::stringstream ss;
+		std::ifstream f;
+		f.open(fileName);
+		if (!f.is_open()) {
+			throw std::runtime_error("");
+		}
+		gameplayState->width = gameplayState->height = 0;
+		while (f.peek() != EOF) {
+			++gameplayState->height;
+			getline(f, line);
+			size_t findPlayer = line.find('@');
+			if (findPlayer != std::string::npos) {
+				scene.camera.position = XMVECTOR{ static_cast<float>(findPlayer) + 0.5f, static_cast<float>(gameplayState->height) + 0.5f, 0, 0 };
+				line[findPlayer] = ' ';
+			}
+			gameplayState->width = std::max(gameplayState->width, line.size());
+			ss << line;
+		}
+		gameplayState->map = ss.str();
+	}
+
+
+	void init(GameplayState* _gameplayState, const std::string& fileName) {
+		gameplayState = _gameplayState;
+		loadMap(fileName);
 		enterMAINMENU();
 	}
 
-	const GJScene* getScene() {
-		return &scene;
+	const GJScene& getScene() {
+		return scene;
 	}
 
 	void kbHandlePREGAME(WPARAM wParam, bool keyDown) {
@@ -70,32 +101,33 @@ public:
 				return;
 			}
 
+			auto& cam = scene.camera;
 			if (wParam == VK_LEFT) {
-				scene.setAngle(scene.getAngle() - 0.3f);
+				cam.setDirectionAngle(cam.getDirectionAngle() - 0.3f);
 			}
 			else if (wParam == VK_RIGHT) {
-				scene.setAngle(scene.getAngle() + 0.3f);
+				cam.setDirectionAngle(cam.getDirectionAngle() + 0.3f);
 			}
 			else if (wParam == 'W') {
-				scene.position = scene.position + scene.getDir() * 0.3f;
+				cam.position = cam.position + scene.camera.getDirectionVector() * 0.3f;
 			}
 			else if (wParam == 'S') {
-				scene.position = scene.position - scene.getDir() * 0.3f;
+				cam.position = cam.position - cam.getDirectionVector() * 0.3f;
 			}
 			else if (wParam == 'Q') {
-				scene.camHeight += 0.2f;
+				cam.camHeight += 0.2f;
 			}
 			else if (wParam == 'E') {
-				scene.camHeight -= 0.2f;
+				cam.camHeight -= 0.2f;
 			}
 			else if (wParam == VK_SPACE) {
 				castQLeap();
 			}
 			else if (wParam == VK_UP) {
-				scene.setPitch(scene.getPitch() + 0.1f);
+				cam.setPitch(cam.getPitch() + 0.1f);
 			}
 			else if (wParam == VK_DOWN) {
-				scene.setPitch(scene.getPitch() - 0.1f);
+				cam.setPitch(cam.getPitch() - 0.1f);
 			}
 
 
@@ -138,38 +170,16 @@ public:
 	}
 
 	void castQLeap() {
-		if (!scene.qLeapCd) {
-			scene.qLeapCd = true;
-			scene.qLeapActive = true;
-			lastQLeap = GNow;
+		if (!gameplayState->qLeapCd) {
+			gameplayState->qLeapCd = true;
+			gameplayState->qLeapActive = true;
+			lastQLeap = GGameTime;
 		}
-
-	}
-	void castExplode(size_t target) {
-		if (scene.explodeCd) { return; }
-		if (scene.points < 75) { return; }
-		if (scene.entities[target].health <= 0) { return; }
-
-		scene.points -= 75;
-		lastExplode = GNow;
-		scene.explodeCd = true;
-		for (int i = 0; i < scene.entities.size(); ++i) {
-			scene.entities[i].health = 1;
-			scene.entities[i].setPos(scene.entities[target].getPos());
-		}
-		static vec3 NW = unit_vector(vec3{ -1, -1, 0 });
-		static vec3 NE = unit_vector(vec3{ 1, -1, 0 });
-		static vec3 SE = unit_vector(vec3{ 1, 1, 0 });
-		static vec3 SW = unit_vector(vec3{ -1, 1, 0 });
-		scene.entities[0].momentum = NW; // Q
-		scene.entities[1].momentum = NE; // W
-		scene.entities[2].momentum = SE; // S
-		scene.entities[3].momentum = SW; // A
 
 	}
 
 	void enterMAINMENU() {
-		scene.state = State::MAINMENU;
+		gameplayState->state = State::MAINMENU;
 
 		//audioEngine->stopAllSounds();
 		//auto music = audioEngine->play2D("assets/mainmenu.mp3", true, false, true);
@@ -179,7 +189,7 @@ public:
 	}
 
 	void enterWIN() {
-		scene.state = State::WIN;
+		gameplayState->state = State::WIN;
 		//audioEngine->stopAllSounds();
 		//auto music = audioEngine->play2D("assets/win.mp3", true, false, true);
 		//if (!music) {
@@ -188,11 +198,11 @@ public:
 	}
 
 	void enterLOSS() {
-		scene.state = State::LOSS;
+		gameplayState->state = State::LOSS;
 	}
 
 	void enterPAUSED() {
-		scene.state = State::PAUSED;
+		gameplayState->state = State::PAUSED;
 
 		//audioEngine->stopAllSounds();
 		//auto music = audioEngine->play2D("assets/mainmenu.mp3", true, false, true);
@@ -203,31 +213,34 @@ public:
 	}
 
 	void enterPREGAME() {
-		scene.state = State::PREGAME;
+		gameplayState->state = State::PREGAME;
 	}
 
 	void enterINGAME() {
-		scene.state = State::INGAME;
+		gameplayState->state = State::INGAME;
 
 	}
 
-	void tick(std::chrono::duration<double, std::milli> delta) {
-		if (scene.state != State::INGAME) {
+	void tick(Seconds delta) {
+		std::cout << cppStringFromEnum(gameplayState->state) << " is my enum\n";
+		//std::cout << scene.state << "\n";
+		GEngineTime += delta;
+		if (gameplayState->state != State::INGAME) {
 			return;
 		}
+		GGameTime += delta;
 		tickEvents(delta);
 		tickStats(delta);
 		tickMovement(delta);
 		tickCollision(delta);
-		++tickCounter;
 	}
 
-	void tickEvents(std::chrono::duration<double, std::milli> delta) {
+	void tickEvents(Seconds delta) {
 
 		if (eventQueue.size() == 0) { return; }
 		auto& tup = eventQueue.back();
 		auto& tupDelta = std::get<DeltaTime>(tup);
-		if (GNow - GGameStart > tupDelta) {
+		if (GGameTime > tupDelta) {
 			std::get<1>(tup)();
 			eventQueue.pop_back();
 		}
@@ -287,46 +300,22 @@ public:
 		globalSizeFactor += add;
 	}
 
-	void tickStats(std::chrono::duration<double, std::milli> delta) {
-		if (scene.explodeCd && GNow - lastExplode > explodeCdSeconds) {
-			scene.explodeCd = false;
-		}
-		if (GNow - lastPointsTime > pointsCdSeconds) {
-			lastPointsTime = GNow;
-			scene.points += 100;
-
+	void tickStats(Seconds delta) {
+		if (GGameTime - lastPointsTime > pointsCdSeconds) {
+			lastPointsTime = GGameTime;
+			gameplayState->points += 100;
 		}
 
-		if (scene.qLeapActive && GNow - lastQLeap > qLeapDuration) {
-			scene.qLeapActive = false;
+		if (gameplayState->qLeapActive && GGameTime - lastQLeap > qLeapDuration) {
+			gameplayState->qLeapActive = false;
 
 		}
-		if (scene.qLeapCd && GNow - lastQLeap > qLeapCdSeconds) {
-			scene.qLeapCd = false;
+		if (gameplayState->qLeapCd && GGameTime - lastQLeap > qLeapCdSeconds) {
+			gameplayState->qLeapCd = false;
 		}
 	}
 
-	void wrapAround(Entity& e, float padding = 0) {
-		vec3 pos = e.getPos();
-		if (pos.x() < 0.f - padding) { e.setX(359.f + padding); }
-		else if (pos.x() > 360.f + padding) { e.setX(1.f - padding); }
-
-		if (pos.y() < 0.f - padding) { e.setY(359.f + padding); }
-		else if (pos.y() > 360.f + padding) { e.setY(1.f - padding); }
-
-	}
-
-	void reflectEntity(Entity& e, float padding = 0) {
-		vec3 pos = e.getPos();
-		if (pos.x() < 0.f - padding) { e.momentum = reflect(e.momentum, vec3{ 1, 0, 0 }); } // left
-		else if (pos.x() > 360.f + padding) { e.momentum = reflect(e.momentum, vec3{ -1, 0, 0 }); } // right
-
-		if (pos.y() < 0.f - padding) { e.momentum = reflect(e.momentum, vec3{ 0, 1, 0 }); } // top
-		else if (pos.y() > 360.f + padding) { e.momentum = reflect(e.momentum, vec3{ 0, -1, 0 }); } // bottom
-
-	}
-
-	void tickMovement(std::chrono::duration<double, std::milli> delta) {
+	void tickMovement(Seconds delta) {
 		//if (!scene.qLeapActive) {
 		//	for (int i = 0; i < scene.entities.size(); ++i) {
 		//		Entity& e = scene.entities[i];
@@ -350,7 +339,7 @@ public:
 		//}
 	}
 
-	void tickCollision(std::chrono::duration<double, std::milli> delta) {
+	void tickCollision(Seconds delta) {
 		//for (int i = 0; i < scene.obstacles.size(); ++i) {
 		//	Entity& o1 = scene.obstacles[i];
 		//	if (o1.health <= 0) {
@@ -383,13 +372,13 @@ public:
 	}
 
 	void ricochet(Entity& o1, Entity& o2) {
-		//o1
-		vec3 away = o1.getPos() - o2.getPos();
+		auto away = o1.position - o2.position;
 		// size is equivalent to weight
-		o1.momentum = unit_vector(away + (o1.momentum * o1.size));
+		o1.momentum = XMVector3Normalize(away + (o1.momentum * o1.size));
+		o1.momentum = XMVector3Normalize(o1.momentum);
 
 		away = -away;
-		o2.momentum = unit_vector(away + (o2.momentum * o2.size));
+		o2.momentum = XMVector3Normalize(away + (o2.momentum * o2.size));
 	}
 
 
@@ -407,10 +396,10 @@ public:
 
 	void endGame() {
 		uint64_t prevHiScore = readHiScore();
-		scene.hiScore = prevHiScore;
-		if (scene.points > prevHiScore) {
+		gameplayState->hiScore = prevHiScore;
+		if (gameplayState->points > prevHiScore) {
 			enterWIN();
-			writeHiScore(scene.points);
+			writeHiScore(gameplayState->points);
 		}
 		else {
 			enterLOSS();
@@ -419,7 +408,7 @@ public:
 
 	void handleInput(WPARAM wParam, bool keyDown) {
 
-		(this->*kbCallTable[static_cast<size_t>(scene.state)])(wParam, keyDown);
+		(this->*kbCallTable[static_cast<size_t>(gameplayState->state)])(wParam, keyDown);
 
 	}
 
@@ -438,8 +427,8 @@ public:
 		scene = GJScene();
 		scene.resetEntities();
 		scene.resetObstacles();
-		GGameStart = getTime();
-		scene.points = 100;
+		GGameTime = Seconds{ 0 };
+		gameplayState->points = 100;
 		enterINGAME();
 	}
 
@@ -456,20 +445,20 @@ public:
 			int side = sideDistr(GEN);
 			double pos = static_cast<double>(posDistr(GEN));
 			if (side == 0) { // top
-				vec3 newPos{ pos, 0, 0 };
-				obstacles[id].setPos(newPos);
+				XMVECTOR newPos{ pos, 0, 0 };
+				obstacles[id].position = newPos;
 			}
 			else if (side == 1) { // right
-				vec3 newPos{ 380, pos, 0 };
-				obstacles[id].setPos(newPos);
+				XMVECTOR newPos{ 380, pos, 0 };
+				obstacles[id].position = newPos;
 			}
 			else if (side == 2) { // bottom
-				vec3 newPos{ pos, 380.f, 0 };
-				obstacles[id].setPos(newPos);
+				XMVECTOR newPos{ pos, 380.f, 0 };
+				obstacles[id].position = newPos;
 			}
 			else { // left
-				vec3 newPos{ 0, pos, 0 };
-				obstacles[id].setPos(newPos);
+				XMVECTOR newPos{ 0, pos, 0 };
+				obstacles[id].position = newPos;
 			}
 
 			unique = true;
@@ -487,7 +476,7 @@ public:
 
 		XMVECTOR center{ 180.f, 180.f, 0.f, 0.f };
 		obstacles[id].momentum = center - obstacles[id].position;
-		obstacles[id].momentum = unit_vector(obstacles[id].momentum);
+		obstacles[id].momentum = XMVector3Normalize(obstacles[id].momentum);
 
 		static std::uniform_int_distribution<uint16_t> sizeDist(7, 11);
 		obstacles[id].size = sizeDist(GEN) + globalSizeFactor;
@@ -498,7 +487,8 @@ public:
 		XMVECTOR delta = XMVectorAbs(e1.position - e2.position);
 		float lim = e1.size + e2.size - cheatParam;
 		uint32_t compareResult = 0;
-		if (XMComparisonAllFalse(XMVectorGreaterR(&compareResult, delta, XMVECTOR{ lim, lim, lim, lim }))) {
+		XMVectorGreaterR(&compareResult, delta, XMVECTOR{ lim, lim, lim, lim });
+		if (XMComparisonAllFalse(compareResult)) {
 			return true;
 		}
 		else {
@@ -532,7 +522,7 @@ public:
 	void writeHiScore(uint64_t score) {
 		try {
 			std::ofstream ofs(hiScoreFile, std::ofstream::out);
-			ofs << std::to_string(scene.points);
+			ofs << std::to_string(gameplayState->points);
 			ofs.close();
 		}
 		catch (std::exception e) {
@@ -545,19 +535,18 @@ private:
 	float cheatFactor = 1.f;
 	float globalSpeedUp = 1.5f;
 	float globalSizeFactor = 0.f;
-	uint64_t tickCounter = 0;
 	std::vector<std::tuple<DeltaTime, std::function<void()>>> eventQueue;
-	std::chrono::duration<double> explodeCdSeconds{ 1.f };
-	std::chrono::duration<double> qLeapCdSeconds{ 12.f };
-	std::chrono::duration<double> qLeapDuration{ 2.f };
-	std::chrono::duration<double> pointsCdSeconds{ 2.f };
-	std::chrono::time_point<std::chrono::high_resolution_clock> lastExplode;
-	std::chrono::time_point<std::chrono::high_resolution_clock> lastQLeap;
-	std::chrono::time_point<std::chrono::high_resolution_clock> lastPointsTime;
+
+	Seconds qLeapCdSeconds{ 12.f };
+	Seconds qLeapDuration{ 2.f };
+	Seconds pointsCdSeconds{ 2.f };
+
+	Seconds lastQLeap;
+	Seconds lastPointsTime;
 	GJScene scene;
 	std::bitset<254> kbMap;
 	irrklang::ISoundEngine* audioEngine;
 	using KeybindHandler = void(GJSimulation::*)(WPARAM, bool);
 	std::array<KeybindHandler, static_cast<size_t>(State::size)> kbCallTable;
-
+	GameplayState* gameplayState;
 };

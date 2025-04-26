@@ -142,6 +142,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\include\common\cpp3rdParty.h" />
+    <ClInclude Include="..\include\common\cppUtil.h" />
     <ClInclude Include="..\include\irrklang\irrKlang.h" />
     <ClInclude Include="2d\common2d.h" />
     <ClInclude Include="3d\aabb.h" />

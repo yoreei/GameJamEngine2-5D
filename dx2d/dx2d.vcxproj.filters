@@ -114,6 +114,12 @@
     <ClInclude Include="stb_image.h">
       <Filter>Header Files\includes</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\common\cppUtil.h">
+      <Filter>Header Files\includes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\common\cpp3rdParty.h">
+      <Filter>Header Files\includes</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dx2d.cpp">
