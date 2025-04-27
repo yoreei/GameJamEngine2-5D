@@ -5,30 +5,101 @@
 #include <functional>
 #include <fstream>
 #include <numbers>
+#include <filesystem>
 
 #include <DirectXMath.h>
 
 #include "GJScene.h"
 #include "irrklang/irrKlang.h"
 #include "GJGlobals.h"
+#include "GJRenderer.h"
 
 using namespace DirectX;
 
-using DeltaTime = std::chrono::duration<double>;
-class GJSimulation {
+/// a.k.a the game engine. handles input, sound, and simulation. Delegates rendering. 
+class GameEngine {
 public:
-	GJSimulation() {
-		kbCallTable[static_cast<size_t>(State::INGAME)] = &GJSimulation::kbHandleINGAME;
-		kbCallTable[static_cast<size_t>(State::PREGAME)] = &GJSimulation::kbHandlePREGAME;
-		kbCallTable[static_cast<size_t>(State::WIN)] = &GJSimulation::kbHandleWIN;
-		kbCallTable[static_cast<size_t>(State::LOSS)] = &GJSimulation::kbHandleLOSS;
-		kbCallTable[static_cast<size_t>(State::PAUSED)] = &GJSimulation::kbHandlePAUSED;
-		kbCallTable[static_cast<size_t>(State::MAINMENU)] = &GJSimulation::kbHandleMAINMENU;
+	GameEngine(HWND hWnd, const std::string& fileName) :
+		renderer{ hWnd, &gameplayState, &rendererScene }
+	{
+		GGameTime = Seconds{ 0 };
+		enterMAINMENU();
+
+		// loadMapFile:
+		[this, &fileName]() -> void {
+			// Load map into simulationScene, then advance rendererScene to simulationScene
+			gameplayState.fileName = fileName;
+			std::string line;
+			std::stringstream ss;
+
+			namespace fs = std::filesystem;
+			fs::path p{ fileName };
+
+			if (!fs::exists(p)) {
+				throw std::runtime_error(
+					"Cannot open map file '" + fileName + "': file does not exist");
+			}
+			if (!fs::is_regular_file(p)) {
+				throw std::runtime_error(
+					"Cannot open map file '" + fileName + "': not a regular file");
+			}
+
+			std::ifstream f;
+			f.open(fileName, std::ios::in | std::ios::binary);
+			if (!f.is_open()) {
+				int err = errno;
+				throw std::system_error(err, std::generic_category(), "Failed to open map file " + fileName);
+			}
+
+			gameplayState.width = gameplayState.height = 0;
+			while (f.peek() != EOF) {
+				++gameplayState.height;
+				getline(f, line);
+				// remove any '\r' left by Windows line endings
+				if (!line.empty() && line.back() == '\r') {
+					line.pop_back();
+				}
+
+				size_t findPlayer = line.find('@');
+				if (findPlayer != std::string::npos) {
+					scene.camera.position = XMVECTOR{ static_cast<float>(findPlayer) + 0.5f, static_cast<float>(gameplayState.height) + 0.5f, 0, 0 };
+					line[findPlayer] = ' ';
+				}
+				gameplayState.width = std::max(gameplayState.width, line.size());
+				ss << line;
+			}
+			gameplayState.map = ss.str();
+
+			advanceRendererToSimulation();
+			}();
+
+		// loadGameplay
+		eventQueue = {
+			// { DeltaTime{60.f}, [this]() { this->event6(); } },
+			//{ DeltaTime{38.f}, [this]() { this->event5(); } },
+			//{ DeltaTime{26.f}, [this]() { this->event4(); } },
+			//{ DeltaTime{18.f}, [this]() { this->event3(); } },
+			//{ DeltaTime{12.f}, [this]() { this->event2(); } },
+			//{ DeltaTime{6.f}, [this]() { this->event1(); } },
+			//{ DeltaTime{0.f}, [this]() { this->event0(); } },
+		};
+
+		gameplayState.points = 100;
+
+		// input handling
+		kbCallTable[static_cast<size_t>(State::INGAME)] = &GameEngine::kbHandleINGAME;
+		kbCallTable[static_cast<size_t>(State::PREGAME)] = &GameEngine::kbHandlePREGAME;
+		kbCallTable[static_cast<size_t>(State::WIN)] = &GameEngine::kbHandleWIN;
+		kbCallTable[static_cast<size_t>(State::LOSS)] = &GameEngine::kbHandleLOSS;
+		kbCallTable[static_cast<size_t>(State::PAUSED)] = &GameEngine::kbHandlePAUSED;
+		kbCallTable[static_cast<size_t>(State::MAINMENU)] = &GameEngine::kbHandleMAINMENU;
 		if (kbCallTable.size() != 6) {
 			MessageBox(NULL, L"update kbCallTable.", L"Error", MB_OK);
 			throw std::runtime_error("");
 		}
 
+
+		// sound:
 		audioEngine = irrklang::createIrrKlangDevice();
 		if (!audioEngine) {
 			MessageBox(NULL, L"Could not initialize audio engine.", L"Error", MB_OK);
@@ -44,39 +115,24 @@ public:
 		}
 	}
 
-	void loadMap(const std::string& fileName) {
-		gameplayState->mapFile = fileName;
-		std::string line;
-		std::stringstream ss;
-		std::ifstream f;
-		f.open(fileName);
-		if (!f.is_open()) {
-			throw std::runtime_error("");
-		}
-		gameplayState->width = gameplayState->height = 0;
-		while (f.peek() != EOF) {
-			++gameplayState->height;
-			getline(f, line);
-			size_t findPlayer = line.find('@');
-			if (findPlayer != std::string::npos) {
-				scene.camera.position = XMVECTOR{ static_cast<float>(findPlayer) + 0.5f, static_cast<float>(gameplayState->height) + 0.5f, 0, 0 };
-				line[findPlayer] = ' ';
-			}
-			gameplayState->width = std::max(gameplayState->width, line.size());
-			ss << line;
-		}
-		gameplayState->map = ss.str();
+	void loadNewGame(const std::string& fileName) {
+		// We can't use *this = {..} because that will create a temporary GameEngine and that is problematic:
+		// The temporary's destructor will release resources whose handles will then be copied to *this. Goes both for:
+		// 1. the winapi handles released via ComPtr
+		// 2. the pointers to Scene and GameplayState that both Simulation and Renderer hold internally.
+		// Finally, (Not a bug, but an inconvenience) if GameEngine has a large memory footprint, we might run out of memory when the temporary
+		// gets created
+
+		HWND hWndCopy = renderer.hWnd;
+		const std::string fileNameCopy = fileName;
+		std::destroy_at(this);
+		std::construct_at(this, hWndCopy, fileNameCopy);
 	}
 
-
-	void init(GameplayState* _gameplayState, const std::string& fileName) {
-		gameplayState = _gameplayState;
-		loadMap(fileName);
-		enterMAINMENU();
-	}
-
-	const GJScene& getScene() {
-		return scene;
+	/// \param alpha [0..1] interpolation factor between simulation and renderer scenes
+	void draw(float alpha) {
+		interpolateRendererToSimulation(alpha);
+		renderer.draw();
 	}
 
 	void kbHandlePREGAME(WPARAM wParam, bool keyDown) {
@@ -89,7 +145,7 @@ public:
 			case 'A':
 			case VK_SPACE:
 			case VK_RETURN:
-				loadNewGame();
+				enterINGAME();
 			}
 		}
 
@@ -170,16 +226,16 @@ public:
 	}
 
 	void castQLeap() {
-		if (!gameplayState->qLeapCd) {
-			gameplayState->qLeapCd = true;
-			gameplayState->qLeapActive = true;
+		if (!gameplayState.qLeapCd) {
+			gameplayState.qLeapCd = true;
+			gameplayState.qLeapActive = true;
 			lastQLeap = GGameTime;
 		}
 
 	}
 
 	void enterMAINMENU() {
-		gameplayState->state = State::MAINMENU;
+		gameplayState.state = State::MAINMENU;
 
 		//audioEngine->stopAllSounds();
 		//auto music = audioEngine->play2D("assets/mainmenu.mp3", true, false, true);
@@ -189,7 +245,7 @@ public:
 	}
 
 	void enterWIN() {
-		gameplayState->state = State::WIN;
+		gameplayState.state = State::WIN;
 		//audioEngine->stopAllSounds();
 		//auto music = audioEngine->play2D("assets/win.mp3", true, false, true);
 		//if (!music) {
@@ -198,11 +254,11 @@ public:
 	}
 
 	void enterLOSS() {
-		gameplayState->state = State::LOSS;
+		gameplayState.state = State::LOSS;
 	}
 
 	void enterPAUSED() {
-		gameplayState->state = State::PAUSED;
+		gameplayState.state = State::PAUSED;
 
 		//audioEngine->stopAllSounds();
 		//auto music = audioEngine->play2D("assets/mainmenu.mp3", true, false, true);
@@ -213,33 +269,33 @@ public:
 	}
 
 	void enterPREGAME() {
-		gameplayState->state = State::PREGAME;
+		gameplayState.state = State::PREGAME;
 	}
 
 	void enterINGAME() {
-		gameplayState->state = State::INGAME;
+		gameplayState.state = State::INGAME;
 
 	}
 
 	void tick(Seconds delta) {
-		std::cout << cppStringFromEnum(gameplayState->state) << " is my enum\n";
-		//std::cout << scene.state << "\n";
 		GEngineTime += delta;
-		if (gameplayState->state != State::INGAME) {
-			return;
+		if (gameplayState.state == State::INGAME) {
+			GGameTime += delta;
+			advanceRendererToSimulation();
+
+			tickEvents(delta);
+			tickStats(delta);
+			tickMovement(delta);
+			tickCollision(delta);
 		}
-		GGameTime += delta;
-		tickEvents(delta);
-		tickStats(delta);
-		tickMovement(delta);
-		tickCollision(delta);
+
 	}
 
 	void tickEvents(Seconds delta) {
 
 		if (eventQueue.size() == 0) { return; }
 		auto& tup = eventQueue.back();
-		auto& tupDelta = std::get<DeltaTime>(tup);
+		auto& tupDelta = std::get<Seconds>(tup);
 		if (GGameTime > tupDelta) {
 			std::get<1>(tup)();
 			eventQueue.pop_back();
@@ -303,16 +359,139 @@ public:
 	void tickStats(Seconds delta) {
 		if (GGameTime - lastPointsTime > pointsCdSeconds) {
 			lastPointsTime = GGameTime;
-			gameplayState->points += 100;
+			gameplayState.points += 100;
 		}
 
-		if (gameplayState->qLeapActive && GGameTime - lastQLeap > qLeapDuration) {
-			gameplayState->qLeapActive = false;
+		if (gameplayState.qLeapActive && GGameTime - lastQLeap > qLeapDuration) {
+			gameplayState.qLeapActive = false;
 
 		}
-		if (gameplayState->qLeapCd && GGameTime - lastQLeap > qLeapCdSeconds) {
-			gameplayState->qLeapCd = false;
+		if (gameplayState.qLeapCd && GGameTime - lastQLeap > qLeapCdSeconds) {
+			gameplayState.qLeapCd = false;
 		}
+	}
+
+	void killEntity(size_t id) {
+		scene.entities[id].health = 0;
+		for (const Entity& e : scene.entities) {
+			if (e.health != 0) {
+				return;
+			}
+		}
+		// here all entities have health 0
+		scene.entities[id].health = 1; //< so the player can see their entity on the loss screen
+		endGame();
+	}
+
+	void endGame() {
+		uint64_t prevHiScore = readHiScore();
+		gameplayState.hiScore = prevHiScore;
+		if (gameplayState.points > prevHiScore) {
+			enterWIN();
+			writeHiScore(gameplayState.points);
+		}
+		else {
+			enterLOSS();
+		}
+	}
+
+	void handleInput(WPARAM wParam, bool keyDown) {
+		(this->*kbCallTable[static_cast<size_t>(gameplayState.state)])(wParam, keyDown);
+	}
+
+	void initRandObstacle(size_t id) {
+		static std::mt19937 GEN(46);
+		static std::uniform_int_distribution<int> posDistr(-20, 380);
+		static std::uniform_int_distribution<int> sideDistr(0, 3);
+
+		auto& obstacles = scene.obstacles;
+		obstacles[id].health = 1;
+		bool unique = false;
+		while (!unique) {
+
+			int side = sideDistr(GEN);
+			double pos = static_cast<double>(posDistr(GEN));
+			if (side == 0) { // top
+				XMVECTOR newPos{ pos, 0, 0 };
+				obstacles[id].position = newPos;
+			}
+			else if (side == 1) { // right
+				XMVECTOR newPos{ 380, pos, 0 };
+				obstacles[id].position = newPos;
+			}
+			else if (side == 2) { // bottom
+				XMVECTOR newPos{ pos, 380.f, 0 };
+				obstacles[id].position = newPos;
+			}
+			else { // left
+				XMVECTOR newPos{ 0, pos, 0 };
+				obstacles[id].position = newPos;
+			}
+
+			unique = true;
+			for (int i = 0; i < obstacles.size(); ++i) {
+				Entity& o1 = scene.obstacles[i];
+				if (o1.health <= 0 || i == id) {
+					continue;
+				}
+				if (obstacles[id].collides(obstacles[i])) {
+					unique = false;
+					break;
+				}
+			}
+		}
+
+		XMVECTOR center{ 180.f, 180.f, 0.f, 0.f };
+		obstacles[id].momentum = center - obstacles[id].position;
+		obstacles[id].momentum = XMVector3Normalize(obstacles[id].momentum);
+
+		static std::uniform_int_distribution<uint16_t> sizeDist(7, 11);
+		obstacles[id].size = sizeDist(GEN) + globalSizeFactor;
+
+	}
+
+
+	uint64_t readHiScore() {
+		std::string line;
+		std::ifstream myfile(hiScoreFile);
+		if (myfile.is_open())
+		{
+			getline(myfile, line);
+			myfile.close();
+		}
+		else {
+			MessageBox(NULL, L"Could not read hiScore file", L"Error", MB_OK);
+			return 0;
+		}
+		uint64_t toInt;
+		try {
+			toInt = std::stoll(line);
+		}
+		catch (std::exception e) {
+			MessageBox(NULL, L"Could not interpret hiScore data", L"Error", MB_OK);
+			return 0;
+		}
+		return toInt;
+	}
+
+	void writeHiScore(uint64_t score) {
+		try {
+			std::ofstream ofs(hiScoreFile, std::ofstream::out);
+			ofs << std::to_string(gameplayState.points);
+			ofs.close();
+		}
+		catch (std::exception e) {
+			MessageBox(NULL, L"Error writing HiScore to file", L"Error", MB_OK);
+		}
+	}
+
+	/// advance
+	void interpolateRendererToSimulation(float alpha) {
+		rendererScene.interpolate(rendererScene, alpha);
+	}
+
+	void advanceRendererToSimulation() {
+		rendererScene = scene; // full copy
 	}
 
 	void tickMovement(Seconds delta) {
@@ -381,161 +560,20 @@ public:
 		o2.momentum = XMVector3Normalize(away + (o2.momentum * o2.size));
 	}
 
-
-	void killEntity(size_t id) {
-		scene.entities[id].health = 0;
-		for (const Entity& e : scene.entities) {
-			if (e.health != 0) {
-				return;
-			}
-		}
-		// here all entities have health 0
-		scene.entities[id].health = 1; //< so the player can see their entity on the loss screen
-		endGame();
-	}
-
-	void endGame() {
-		uint64_t prevHiScore = readHiScore();
-		gameplayState->hiScore = prevHiScore;
-		if (gameplayState->points > prevHiScore) {
-			enterWIN();
-			writeHiScore(gameplayState->points);
-		}
-		else {
-			enterLOSS();
-		}
-	}
-
-	void handleInput(WPARAM wParam, bool keyDown) {
-
-		(this->*kbCallTable[static_cast<size_t>(gameplayState->state)])(wParam, keyDown);
-
-	}
-
-	void loadNewGame() {
-
-		eventQueue = {
-			// { DeltaTime{60.f}, [this]() { this->event6(); } },
-			//{ DeltaTime{38.f}, [this]() { this->event5(); } },
-			//{ DeltaTime{26.f}, [this]() { this->event4(); } },
-			//{ DeltaTime{18.f}, [this]() { this->event3(); } },
-			//{ DeltaTime{12.f}, [this]() { this->event2(); } },
-			//{ DeltaTime{6.f}, [this]() { this->event1(); } },
-			//{ DeltaTime{0.f}, [this]() { this->event0(); } },
-		};
-
-		scene = GJScene();
-		scene.resetEntities();
-		scene.resetObstacles();
-		GGameTime = Seconds{ 0 };
-		gameplayState->points = 100;
-		enterINGAME();
-	}
-
-	void initRandObstacle(size_t id) {
-		static std::mt19937 GEN(46);
-		static std::uniform_int_distribution<int> posDistr(-20, 380);
-		static std::uniform_int_distribution<int> sideDistr(0, 3);
-
-		auto& obstacles = scene.obstacles;
-		obstacles[id].health = 1;
-		bool unique = false;
-		while (!unique) {
-
-			int side = sideDistr(GEN);
-			double pos = static_cast<double>(posDistr(GEN));
-			if (side == 0) { // top
-				XMVECTOR newPos{ pos, 0, 0 };
-				obstacles[id].position = newPos;
-			}
-			else if (side == 1) { // right
-				XMVECTOR newPos{ 380, pos, 0 };
-				obstacles[id].position = newPos;
-			}
-			else if (side == 2) { // bottom
-				XMVECTOR newPos{ pos, 380.f, 0 };
-				obstacles[id].position = newPos;
-			}
-			else { // left
-				XMVECTOR newPos{ 0, pos, 0 };
-				obstacles[id].position = newPos;
-			}
-
-			unique = true;
-			for (int i = 0; i < obstacles.size(); ++i) {
-				Entity& o1 = scene.obstacles[i];
-				if (o1.health <= 0 || i == id) {
-					continue;
-				}
-				if (isCollision(obstacles[id], obstacles[i])) {
-					unique = false;
-					break;
-				}
-			}
-		}
-
-		XMVECTOR center{ 180.f, 180.f, 0.f, 0.f };
-		obstacles[id].momentum = center - obstacles[id].position;
-		obstacles[id].momentum = XMVector3Normalize(obstacles[id].momentum);
-
-		static std::uniform_int_distribution<uint16_t> sizeDist(7, 11);
-		obstacles[id].size = sizeDist(GEN) + globalSizeFactor;
-
-	}
-
-	bool isCollision(const Entity& e1, const Entity& e2, float cheatParam = 0.f) {
-		XMVECTOR delta = XMVectorAbs(e1.position - e2.position);
-		float lim = e1.size + e2.size - cheatParam;
-		uint32_t compareResult = 0;
-		XMVectorGreaterR(&compareResult, delta, XMVECTOR{ lim, lim, lim, lim });
-		if (XMComparisonAllFalse(compareResult)) {
-			return true;
-		}
-		else {
-			return false;
-		}
-	}
-
-	uint64_t readHiScore() {
-		std::string line;
-		std::ifstream myfile(hiScoreFile);
-		if (myfile.is_open())
-		{
-			getline(myfile, line);
-			myfile.close();
-		}
-		else {
-			MessageBox(NULL, L"Could not read hiScore file", L"Error", MB_OK);
-			return 0;
-		}
-		uint64_t toInt;
-		try {
-			toInt = std::stoll(line);
-		}
-		catch (std::exception e) {
-			MessageBox(NULL, L"Could not interpret hiScore data", L"Error", MB_OK);
-			return 0;
-		}
-		return toInt;
-	}
-
-	void writeHiScore(uint64_t score) {
-		try {
-			std::ofstream ofs(hiScoreFile, std::ofstream::out);
-			ofs << std::to_string(gameplayState->points);
-			ofs.close();
-		}
-		catch (std::exception e) {
-			MessageBox(NULL, L"Error writing HiScore to file", L"Error", MB_OK);
-		}
-	}
-
+	GJRenderer renderer;
 private:
-	std::string hiScoreFile = "hiScore.txt";
 	float cheatFactor = 1.f;
 	float globalSpeedUp = 1.5f;
+
+	GameplayState gameplayState{};
+
+	/// simulation scene
+	GJScene scene{};
+	GJScene rendererScene{};
+
+	std::string hiScoreFile = "hiScore.txt";
 	float globalSizeFactor = 0.f;
-	std::vector<std::tuple<DeltaTime, std::function<void()>>> eventQueue;
+	std::vector<std::tuple<Seconds, std::function<void()>>> eventQueue;
 
 	Seconds qLeapCdSeconds{ 12.f };
 	Seconds qLeapDuration{ 2.f };
@@ -543,10 +581,9 @@ private:
 
 	Seconds lastQLeap;
 	Seconds lastPointsTime;
-	GJScene scene;
 	std::bitset<254> kbMap;
 	irrklang::ISoundEngine* audioEngine;
-	using KeybindHandler = void(GJSimulation::*)(WPARAM, bool);
+	using KeybindHandler = void(GameEngine::*)(WPARAM, bool);
 	std::array<KeybindHandler, static_cast<size_t>(State::size)> kbCallTable;
-	GameplayState* gameplayState;
 };
+

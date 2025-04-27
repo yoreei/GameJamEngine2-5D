@@ -36,9 +36,6 @@
     <ClInclude Include="GJScene.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="GJSimulation.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Animation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -119,6 +116,9 @@
     </ClInclude>
     <ClInclude Include="..\include\common\cpp3rdParty.h">
       <Filter>Header Files\includes</Filter>
+    </ClInclude>
+    <ClInclude Include="GameEngine.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

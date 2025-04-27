@@ -28,10 +28,10 @@ BOOST_DEFINE_ENUM_CLASS(
 
 /* Simulation writes to GameplayState, Renderer displays only */
 struct GameplayState {
-	std::string map;
+	std::string map = "no_map";
 	uint64_t width = 0;
 	uint64_t height = 0;
-	std::string mapFile = "no_mapFile";
+	std::string fileName = "no_mapFile";
 	State state = State::MAINMENU;
 	bool explodeCd = false;
 	bool qLeapCd = false;
@@ -69,6 +69,19 @@ struct Entity {
 		size = e1.size * (1.f - alpha) + e2.size * alpha;
 		momentum = XMVector4Normalize(XMVectorLerp(e1.momentum, e2.momentum, alpha));
 		position = XMVector4Normalize(XMVectorLerp(e1.position, e2.position, alpha));
+	}
+
+	bool collides(const Entity& other, float cheatParam = 0.f) {
+		XMVECTOR delta = XMVectorAbs(position - other.position);
+		float lim = size + other.size - cheatParam;
+		uint32_t compareResult = 0;
+		XMVectorGreaterR(&compareResult, delta, XMVECTOR{ lim, lim, lim, lim });
+		if (XMComparisonAllFalse(compareResult)) {
+			return true;
+		}
+		else {
+			return false;
+		}
 	}
 public:
 	//v * Non-Interpolatable:
@@ -129,14 +142,14 @@ struct GJScene {
 	//}
 
 
-	void interpolate(const GJScene& s1, const GJScene& s2, float alpha) {
+	void interpolate(const GJScene& other, float alpha) {
 		for (int i = 0; i < entities.size(); ++i) {
-			entities[i].interpolate(s1.entities[i], s2.entities[i], alpha);
+			entities[i].interpolate(entities[i], other.entities[i], alpha);
 		}
 		for (int i = 0; i < obstacles.size(); ++i) {
-			obstacles[i].interpolate(s1.obstacles[i], s2.obstacles[i], alpha);
+			obstacles[i].interpolate(obstacles[i], other.obstacles[i], alpha);
 		}
-		camera.interpolate(s1.camera, s2.camera, alpha);
+		camera.interpolate(camera, other.camera, alpha);
 	}
 public:
 	//v * Non-interpolatable:
@@ -172,7 +185,7 @@ public:
 			ASSERT_EXPR(false, "not implemented yet");
 		}
 
-		XMVECTOR getDirectionVector() {
+		XMVECTOR getDirectionVector() const {
 			return directionVector;
 		}
 
@@ -229,3 +242,4 @@ public:
 
 	} camera;
 };
+

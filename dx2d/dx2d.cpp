@@ -23,13 +23,9 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 
-#include "GJRenderer.h"
-#include "GJScene.h"
-#include "GJSimulation.h"
 #include "GJGlobals.h"
+#include "GameEngine.h"
 
-GJSimulation simulation;
-GJRenderer renderer;
 
 /// \return true if application should continue, false if application should stop
 bool processPendingOsMessages() {
@@ -150,10 +146,8 @@ int WINAPI wWinMain(
 
 	ShowWindow(hwnd, nCmdShow);
 
-	GJScene prevScene{};
-	GameplayState gameplayState{};
-	renderer.init(hwnd, &gameplayState);
-	simulation.init(&gameplayState, "../assets/map1.txt");
+	std::unique_ptr<GameEngine> gameWorld = std::make_unique<GameEngine>(hwnd, "../assets/map1.txt");
+	GGameEnginePtr = gameWorld.get();
 
 	// Message loop
 	TimePoint currentTime = getTimePoint();
@@ -173,13 +167,11 @@ int WINAPI wWinMain(
 
 		for (;accumulator >= deltaTime; accumulator -= deltaTime)
 		{
-			prevScene = simulation.getScene(); // copy
-			simulation.tick(deltaTime);
+			GGameEnginePtr->tick(deltaTime);
 		}
 
 		const float alpha = accumulator / deltaTime;
-		renderer.interpolate(prevScene, simulation.getScene(), alpha);
-		renderer.draw(deltaTime);
+		GGameEnginePtr->draw(alpha);
 	}
 
 	CoUninitialize();
@@ -202,7 +194,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	return 0;
 	case WM_SIZE:
 	{
-		renderer.wmResize(hwnd);
+		if (GGameEnginePtr) {
+			GGameEnginePtr->renderer.wmResize(hwnd);
+		}
 	}
 	return 0;
 
@@ -214,13 +208,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 	case WM_KEYDOWN:
 	{
-		simulation.handleInput(wParam, true);
+		if (GGameEnginePtr) {
+			GGameEnginePtr->handleInput(wParam, true);
+		}
 	}
 	return 0;
 
 	case WM_KEYUP:
 	{
-		simulation.handleInput(wParam, false);
+		if (GGameEnginePtr) {
+			GGameEnginePtr->handleInput(wParam, false);
+		}
 	}
 	return 0;
 	default:

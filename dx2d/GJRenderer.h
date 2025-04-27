@@ -25,6 +25,8 @@
 using Microsoft::WRL::ComPtr;
 constexpr float PI = std::numbers::pi;
 
+constexpr bool DEBUG_FLOOR = false;
+
 constexpr size_t toId(auto someEnum) {
 	return static_cast<size_t>(someEnum);
 }
@@ -56,21 +58,19 @@ struct CPUBitmap {
 };
 class GJRenderer {
 public:
-	void init(HWND _hWnd, const GameplayState* _gameplayState) {
-		gameplayState = _gameplayState;
-		hWnd = _hWnd;
+	GJRenderer(HWND hWnd, const GameplayState* gameplayState, const GJScene* scene) : hWnd(hWnd), gameplayState(gameplayState), scene(scene) {
 
 		// Create WIC Factory
 		HRESULT hr = CoCreateInstance(
 			CLSID_WICImagingFactory,
 			nullptr,
 			CLSCTX_INPROC_SERVER,
-			IID_PPV_ARGS(&pWICFactory)
+			IID_PPV_ARGS(pWICFactory.GetAddressOf())
 		);
 		checkFailed(hr, hWnd, "CoCreateInstance failed");
 
 
-		hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &pFactory);
+		hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, pFactory.GetAddressOf());
 		checkFailed(hr, hWnd, "CreateFactory");
 
 
@@ -87,7 +87,7 @@ public:
 					hWnd,
 					D2D1::SizeU(clientRect.right, clientRect.bottom)
 				),
-				&pRenderTarget
+				pRenderTarget.GetAddressOf()
 			);
 			checkFailed(hr, hWnd, "createHwndRenderTarget failed");
 
@@ -118,7 +118,7 @@ public:
 		// Create a compatible render target for low-res drawing
 		hr = pRenderTarget->CreateCompatibleRenderTarget(
 			D2D1::SizeF(viewportWidth, viewportHeight),
-			&pLowResRenderTarget
+			pLowResRenderTarget.GetAddressOf()
 		);
 		checkFailed(hr, hWnd, "createCompatibleRenderTarget failed");
 		// Setup transformations
@@ -264,41 +264,7 @@ public:
 
 	}
 
-	~GJRenderer() {
-		releaseResources();
-	}
-
-	void interpolate(const GJScene& scene1, const GJScene& scene2, float alpha) {
-		scene.interpolate(scene1, scene2, alpha);
-	}
-
-	void releaseResources() {
-		for (auto& pair : brushes) {
-			auto& pBrush = std::get<ID2D1SolidColorBrush*>(pair);
-			pBrush->Release();
-			pBrush = nullptr;
-		}
-
-		if (pRenderTarget)
-		{
-			pRenderTarget->Release();
-			pRenderTarget = nullptr;
-		}
-
-		if (pFactory)
-		{
-			pFactory->Release();
-			pFactory = nullptr;
-		}
-
-		if (pLowResRenderTarget) {
-			pLowResRenderTarget->Release();
-
-		}
-
-	}
-
-	void draw(Seconds delta) {
+	void draw() {
 		pRenderTarget->BeginDraw();
 		pLowResRenderTarget->BeginDraw();
 
@@ -347,7 +313,7 @@ public:
 		if (hr == D2DERR_RECREATE_TARGET)
 		{
 			assert(false); // this case has not been tested / implemented yet
-			releaseResources();
+			throw std::runtime_error("D2DERR_RECREATE_TARGET");
 			// warning viewportWidth is already manilated here:
 			//init(hWnd, viewportWidth, viewportHeight, gameplayState);
 		}
@@ -392,9 +358,9 @@ public:
 		pRenderTarget->DrawText(
 			instructions.c_str(),    // Text to render
 			wcslen(instructions.c_str()),
-			textFormats[static_cast<size_t>(TextFormat::NORMAL)],            // Text format
+			textFormats[static_cast<size_t>(TextFormat::NORMAL)].Get(),            // Text format
 			D2D1::RectF(20, 20, 340, 340), // Layout rectangle
-			brushes["white"]
+			brushes["white"].Get()
 		);
 
 	}
@@ -422,28 +388,28 @@ public:
 				pos.left = x * size;
 				pos.right = pos.left + size;
 
-				pLowResRenderTarget->FillRectangle(pos, brush);
+				pLowResRenderTarget->FillRectangle(pos, brush.Get());
 
 			}
 		}
 
 		// draw entities on minimap
-		XMVECTOR posV = size * XMVectorFloor(scene.camera.position);
+		XMVECTOR posV = size * XMVectorFloor(scene->camera.position);
 		const float pos_x = XMVectorGetX(posV);
 		const float pos_y = XMVectorGetY(posV);
 		pos = D2D1::RectF(pos_x, pos_y, pos_x + size, pos_y + size);
 		brush->SetColor(D2D1::ColorF{ 1.f, 0.7f, 0.7f, minimapAlpha });
-		pLowResRenderTarget->FillRectangle(pos, brush);
+		pLowResRenderTarget->FillRectangle(pos, brush.Get());
 
 		//v Draw LOS
 		brush->SetColor(D2D1::ColorF{ 1.f, 1.f, 0.7, minimapAlpha });
-		XMVECTOR endV = posV + scene.camera.getDirectionVector() * 20;
+		XMVECTOR endV = posV + scene->camera.getDirectionVector() * 20;
 		const float end_x = XMVectorGetX(endV);
 		const float end_y = XMVectorGetY(endV); //< '-' because screen-space is inverted
 		pLowResRenderTarget->DrawLine(
 			D2D1_POINT_2F(pos_x, pos_y),
 			D2D1_POINT_2F(end_x, end_y),
-			brush, 1.f);
+			brush.Get(), 1.f);
 
 	}
 
@@ -472,30 +438,34 @@ public:
 		c %= 2;
 		c *= 255;
 
-		if (x >= gameplayState->width || y >= gameplayState->height || x <= 0 || y <= 0) {
-			return (0xFF << 24) | (c << 16) | (c << 8) | (c / 2);
+
+		if (DEBUG_FLOOR) {
+			bool tileOutsideMap = x >= gameplayState->width || y >= gameplayState->height || x <= 0 || y <= 0;
+			if (tileOutsideMap) {
+				return (0xFF << 24) | (c << 16) | (c << 8) | (c / 2);
+			}
+
+			bool tileUnderWall = gameplayState->getTile(size_t(x), size_t(y)) == '#';
+			if (tileUnderWall)
+			{
+				return 0xFFAAAAFF;
+			}
+
+			bool tile3UnitsToNorth = XMVector4Less(XMVectorAbs(scene->camera.position - XMVECTOR{ x,y + 3.f,0.f,0.f }), XMVECTOR{ 0.5f,0.5f,0.5f,0.5f });
+			if (tile3UnitsToNorth)
+			{
+				return 0xFFAAFFAA;
+			}
+
+			bool tileUnderCamera = XMVector4Less(XMVectorAbs(scene->camera.position - XMVECTOR{ x,y,0.f,0.f }), XMVECTOR{ 0.5f,0.5f,0.5f,0.5f });
+			if (tileUnderCamera)
+			{
+				return 0xFFFFAAAA;
+			}
 		}
 
-		bool wall = XMVector4Less(XMVectorAbs(scene.camera.position - XMVECTOR{ x,y + 3.f,0.f,0.f }), XMVECTOR{ 0.5f,0.5f,0.5f,0.5f });
-		if (gameplayState->getTile(size_t(x), size_t(y)) == '#')
-		{
-			return 0xFFAAAAFF;
-		}
-
-		bool less = XMVector4Less(XMVectorAbs(scene.camera.position - XMVECTOR{ x,y + 3.f,0.f,0.f }), XMVECTOR{ 0.5f,0.5f,0.5f,0.5f });
-		if (less)
-		{
-			return 0xFFAAFFAA;
-		}
-
-		less = XMVector4Less(XMVectorAbs(scene.camera.position - XMVECTOR{ x,y,0.f,0.f }), XMVECTOR{ 0.5f,0.5f,0.5f,0.5f });
-		if (less)
-		{
-			return 0xFFFFAAAA;
-		}
-		else {
-			return (0xFF << 24) | (c << 16) | (c << 8) | (c);
-		}
+		// checkerboard pattern:
+		return (0xFF << 24) | (c << 16) | (c << 8) | (c);
 
 	}
 
@@ -517,9 +487,9 @@ public:
 	void drawWall(float x, float dist, float height, float color) {
 		const float& FOCAL_LENGTH = HscrH<float>();
 		float pixHeight = (FOCAL_LENGTH * height) / dist;
-		brush->SetColor(D2D1::ColorF(color, color, color, 0.5f));
-		float pixBottom = getHorizon(scene.camera.pitch) + (FOCAL_LENGTH * (scene.camera.camHeight)) / dist;
-		pLowResRenderTarget->DrawLine(D2D1_POINT_2F(x, pixBottom), D2D1_POINT_2F(x, pixBottom - pixHeight), brush, 1.f);
+		brush->SetColor(D2D1::ColorF(color, color, color, DEBUG_FLOOR ? 0.5f : 1.f));
+		float pixBottom = getHorizon(scene->camera.pitch) + (FOCAL_LENGTH * (scene->camera.camHeight)) / dist;
+		pLowResRenderTarget->DrawLine(D2D1_POINT_2F(x, pixBottom), D2D1_POINT_2F(x, pixBottom - pixHeight), brush.Get(), 1.f);
 	}
 
 	void drawWalls() {
@@ -527,7 +497,7 @@ public:
 		XMVECTOR dir;
 		for (int x = 0; x < viewportWidth; ++x) {
 			float fixPersp = getPixelDir(x, OUT dir);
-			dist = intersect(scene.camera.position, dir);
+			dist = intersect(scene->camera.position, dir);
 			dist = std::clamp(dist, 0.f, MAXVIEWDIST);
 			float color = -(dist / MAXVIEWDIST) + 1.f;
 			drawWall(x, dist * fixPersp, 1.f, color);
@@ -574,9 +544,9 @@ public:
 		pRenderTarget->DrawText(
 			wPoints.c_str(),    // Text to render
 			wcslen(wPoints.c_str()),
-			textFormats[toId(TextFormat::SMALL)],            // Text format
+			textFormats[toId(TextFormat::SMALL)].Get(),            // Text format
 			D2D1::RectF(0, 335, 345, 360), // Layout rectangle
-			brushes["white"]
+			brushes["white"].Get()
 		);
 
 		if (!gameplayState->qLeapCd) {
@@ -600,7 +570,7 @@ public:
 			0.f, 0.f,
 			float(viewportWidth), float(viewportHeight)
 		);
-		pRenderTarget->DrawRectangle(unitSquare, brushes["amber"], 2.f);
+		pRenderTarget->DrawRectangle(unitSquare, brushes["amber"].Get(), 2.f);
 
 	}
 
@@ -608,18 +578,18 @@ public:
 		pLowResRenderTarget->DrawText(
 			L"Paused",    // Text to render
 			wcslen(L"Paused"),
-			textFormats[static_cast<size_t>(TextFormat::HEADING)],            // Text format
+			textFormats[static_cast<size_t>(TextFormat::HEADING)].Get(),            // Text format
 			D2D1::RectF(0, 40, 360, 180), // Layout rectangle
-			brushes["white"]
+			brushes["white"].Get()
 		);
 
 		std::wstring t = L"[ESC] Resume\n[R] Reload\n[BSPACE] Quit";
 		pLowResRenderTarget->DrawText(
 			t.c_str(),    // Text to render
 			wcslen(t.c_str()),
-			textFormats[static_cast<size_t>(TextFormat::NORMAL)],            // Text format
+			textFormats[static_cast<size_t>(TextFormat::NORMAL)].Get(),            // Text format
 			D2D1::RectF(0, 180, 320, 210), // Layout rectangle
-			brushes["white"]
+			brushes["white"].Get()
 		);
 	}
 
@@ -628,17 +598,17 @@ public:
 		pLowResRenderTarget->DrawText(
 			heading.c_str(),    // Text to render
 			wcslen(heading.c_str()),
-			textFormats[static_cast<size_t>(TextFormat::HEADING)],            // Text format
+			textFormats[static_cast<size_t>(TextFormat::HEADING)].Get(),            // Text format
 			D2D1::RectF(0, 40, 360, 180), // Layout rectangle
-			brushes["white"]
+			brushes["white"].Get()
 		);
 
 		pLowResRenderTarget->DrawText(
 			L"[R] Reload\n[BSPACE] Quit",    // Text to render
 			wcslen(L"[R] Reload\n[BSPACE] Quit"),
-			textFormats[static_cast<size_t>(TextFormat::NORMAL)],            // Text format
+			textFormats[static_cast<size_t>(TextFormat::NORMAL)].Get(),            // Text format
 			D2D1::RectF(0, 220, 320, 300), // Layout rectangle
-			brushes["white"]
+			brushes["white"].Get()
 		);
 
 	}
@@ -648,17 +618,17 @@ public:
 		pLowResRenderTarget->DrawText(
 			L"Electric\nBubble\nBath!",    // Text to render
 			wcslen(L"Electric\nBubble\nBath!"),
-			textFormats[static_cast<size_t>(TextFormat::HEADING)],            // Text format
+			textFormats[static_cast<size_t>(TextFormat::HEADING)].Get(),            // Text format
 			D2D1::RectF(0, 40, 360, 180), // Layout rectangle
-			brushes["blue"]
+			brushes["blue"].Get()
 		);
 
 		pLowResRenderTarget->DrawText(
 			L"[ENTER] Game\n[BSPACE] Quit",    // Text to render
 			wcslen(L"[ENTER] Game\nF[BSPACE] Quit"),
-			textFormats[static_cast<size_t>(TextFormat::NORMAL)],            // Text format
+			textFormats[static_cast<size_t>(TextFormat::NORMAL)].Get(),            // Text format
 			D2D1::RectF(0, 180, 320, 210), // Layout rectangle
-			brushes["blue"]
+			brushes["blue"].Get()
 		);
 
 		//pRenderTarget->DrawText(
@@ -679,14 +649,14 @@ public:
 
 	/* output: perspective correction coefficient */
 	float getPixelDir(int x, OUT XMVECTOR& dir) {
-		float imagePlaneDistance = scene.camera.getImagePlaneDistance(); // depends on field of view
+		float imagePlaneDistance = scene->camera.getImagePlaneDistance(); // depends on field of view
 		float pixelDirection = (float(x) - HscrW()) / viewportWidth; // -0.5 to 0.5 (because image plane has width 1) 
 		dir = { imagePlaneDistance, pixelDirection, 0.f, 0.f };
 		dir = XMVector3Normalize(dir);
 		float screenSpaceAngle = std::atan2f(XMVectorGetY(dir), XMVectorGetX(dir));
 
-		// todo use scene.camera.getDirectionAngle() ?
-		float angle = std::atan2f(XMVectorGetY(scene.camera.getDirectionVector()), XMVectorGetX(scene.camera.getDirectionVector()));
+		// todo use scene->camera.getDirectionAngle() ?
+		float angle = std::atan2f(XMVectorGetY(scene->camera.getDirectionVector()), XMVectorGetX(scene->camera.getDirectionVector()));
 		XMVECTOR worldFromScreen = XMQuaternionRotationAxis({ 0,0,1,0 }, angle);
 		dir = XMVector3Rotate(dir, worldFromScreen);
 		assert(DirectX::Internal::XMVector3IsUnit(dir));
@@ -788,7 +758,7 @@ public:
 	void updateDrawBuffer() {
 		// Sky
 
-		//float t_horizon = scene.zDir / scene.minZ;
+		//float t_horizon = scene->zDir / scene->minZ;
 		//horizon = std::clamp(horizon, 0, viewportHeight - 1); //< todo delete?
 		int topBandHeight = 0.3f * float(viewportHeight);
 		int r_top = 200;
@@ -807,7 +777,7 @@ public:
 		float Nf = 1 + log(1.0f / topBandHeight) / log(f);
 		int N = std::ceil(Nf);
 
-		int yPos = std::clamp(getHorizon(scene.camera.pitch), 0, viewportHeight - 1);
+		int yPos = std::clamp(getHorizon(scene->camera.pitch), 0, viewportHeight - 1);
 		int bandHeight;
 		float bandHeightF;
 		for (int i = N; i >= 0 && yPos >= 0; --i)
@@ -837,24 +807,24 @@ public:
 
 
 		//v Floor:
-		float horTan = std::tan(scene.camera.getFov() / 2.f); //< horizontal tan
-		float screenDist = HscrH<float>() / scene.camera.getVfov();
+		float horTan = std::tan(scene->camera.getFov() / 2.f); //< horizontal tan
+		float screenDist = HscrH<float>() / scene->camera.getVfov();
 		float _x = 0.f;
 		float _y = 0.f;
 		//float perspective = 0; // 0 to 1
 
-		int y = std::clamp(getHorizon(scene.camera.pitch) + 1, 0, viewportHeight - 1);
+		int y = std::clamp(getHorizon(scene->camera.pitch) + 1, 0, viewportHeight - 1);
 		for (; y < viewportHeight; ++y) {
-			float zAngle = std::atan2f(screenDist, y - getHorizon(scene.camera.pitch) - 1); // hor.angle of vision for pix y. 
-			float y_d = scene.camera.camHeight * std::tanf(zAngle); // distance along y-plane that scanline meets floor-plane
+			float zAngle = std::atan2f(screenDist, y - getHorizon(scene->camera.pitch) - 1); // hor.angle of vision for pix y. 
+			float y_d = scene->camera.camHeight * std::tanf(zAngle); // distance along y-plane that scanline meets floor-plane
 
 			//v   opposite = tan(a) * adj
 			float horWidth = horTan * y_d; //< half horizontal width (how many units we can see horizontally to the left of center in this scanline)
 			for (int x = 0; x < viewportWidth; ++x) {
 				float x_t = (x - HscrW<float>()) / HscrW<float>(); // -1 (left) to 1 (right)
-				//float screenAngle = (scene.getFov() / 2.f) * x_t; // results in slight perspective warp
+				//float screenAngle = (scene->getFov() / 2.f) * x_t; // results in slight perspective warp
 				float screenAngle = std::atan2f(horWidth * x_t, y_d); //< hor.angle of vision for pix x. 
-				float angle = scene.camera.getDirectionAngle() + screenAngle;
+				float angle = scene->camera.getDirectionAngle() + screenAngle;
 
 				//v   hyp		   = adj / cos(a)
 				float perspCorrect = y_d / std::cosf(screenAngle);
@@ -863,8 +833,8 @@ public:
 				_y = std::sinf(angle) * perspCorrect;
 
 				// translate
-				_y += XMVectorGetY(scene.camera.position);
-				_x += XMVectorGetX(scene.camera.position);
+				_y += XMVectorGetY(scene->camera.position);
+				_x += XMVectorGetX(scene->camera.position);
 
 				//spdlog::info("x: {}, y: {}, _x: {}, _y: {}\n",x, y, _x, _y);
 				uint32_t sample = sampleFloor(_x, _y);
@@ -873,6 +843,8 @@ public:
 
 		}
 	}
+
+	HWND hWnd;
 
 private:
 	void checkFailed(HRESULT hr, HWND hwnd, const std::string& message) {
@@ -891,19 +863,18 @@ private:
 	std::wstring fontName = L"Press Start 2P";
 	int viewportWidth; //< adjusted for upscaling
 	int viewportHeight; //< adjusted for upscaling
-	HWND hWnd;
-	GJScene scene{};
-	ID2D1HwndRenderTarget* pRenderTarget = nullptr;
-	ID2D1BitmapRenderTarget* pLowResRenderTarget = nullptr;
-	ID2D1Factory* pFactory = nullptr;
+	GJScene const* scene = nullptr;
+	ComPtr<ID2D1HwndRenderTarget> pRenderTarget = nullptr;
+	ComPtr<ID2D1BitmapRenderTarget> pLowResRenderTarget = nullptr;
+	ComPtr<ID2D1Factory> pFactory = nullptr;
 	ComPtr<IWICImagingFactory> pWICFactory = nullptr;
-	std::map<std::string, ID2D1SolidColorBrush*> brushes = {
+	std::map<std::string, ComPtr<ID2D1SolidColorBrush>> brushes = {
 		{"black", nullptr },
 		{"green", nullptr },
 		{"amber", nullptr },
 		{"blue", nullptr } };
-	ID2D1SolidColorBrush* brush = nullptr; //< multi-purpose brush to be used with .SetColor();
-	std::array<IDWriteTextFormat*, static_cast<size_t>(TextFormat::size)> textFormats;
+	ComPtr<ID2D1SolidColorBrush> brush = nullptr; //< multi-purpose brush to be used with .SetColor();
+	std::array<ComPtr<IDWriteTextFormat>, static_cast<size_t>(TextFormat::size)> textFormats;
 	using DrawFunction = void(GJRenderer::*)();
 	std::array<DrawFunction, static_cast<size_t>(State::size)> drawCallTable;
 
@@ -913,7 +884,7 @@ private:
 	std::vector<uint32_t> drawBuffer;  // in initDrawBuffer
 	CPUBitmap floorCPUTex;
 	float MAXVIEWDIST = 90.f;
-	const GameplayState* gameplayState;
+	GameplayState const* gameplayState;
 
 };
 
