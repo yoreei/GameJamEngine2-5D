@@ -413,24 +413,59 @@ public:
 
 	}
 
-	float intersect(const XMVECTOR& origin, const XMVECTOR& dir) const {
-		BoundingBox b{ XMFLOAT3{0,0,0}, XMFLOAT3{0.5,0.5,0} };
-		float dist = FLT_MAX;
-		float bestDist = FLT_MAX;
+
+	struct IntersectionData {
+		enum Side {
+			NULLSIDE,
+			NORTH_SOUTH,
+			EAST_WEST,
+		};
+		float distance = 0;
+		// Texture texture = Texture::NO_TEXTURE
+		D2D1::ColorF solidColor = D2D1::ColorF{ 1.f, 1.f, 1.f, 1.f };
+		Side side = NULLSIDE;
+	};
+
+	IntersectionData::Side whichSideWasHit(const XMVECTOR& origin, const XMVECTOR& dir, const BoundingBox& b, float dist) const {
+		// * Determine which side was hit:
+		XMVECTOR P = origin + dist * dir;
+		// ** vector from box center to hit point
+		XMVECTOR boxCenterVector = XMVectorSet(b.Center.x, b.Center.y, b.Center.z, 0.f);
+		XMVECTOR d = P - boxCenterVector;
+		float dx = XMVectorGetX(d);
+		float dy = XMVectorGetY(d);
+
+		if (std::abs(dy) > std::abs(dx)) {
+			return IntersectionData::NORTH_SOUTH;
+		}
+		else {
+			return IntersectionData::EAST_WEST;
+		}
+	}
+
+	void intersect(const XMVECTOR& origin, const XMVECTOR& dir, IntersectionData& out) const {
+		BoundingBox bestBox;
+		float bestDistance = FLT_MAX;
 
 		for (int y = 0; y < gameplayState->height; ++y) {
 			for (int x = 0; x < gameplayState->width; ++x) {
 				if (gameplayState->getTile(x, y) != '#') { continue; }
-				b.Center = XMFLOAT3{ static_cast<float>(x) + 0.5f,static_cast<float>(y) + 0.5f,0 };
-				bool intersects = b.Intersects(origin, dir, OUT dist);
-				if (intersects) {
-					bestDist = std::min(bestDist, dist);
+				BoundingBox b{ XMFLOAT3{ float(x) + 0.5f,float(y) + 0.5f,0 }, XMFLOAT3{0.5,0.5,0} };
+
+				float candidateDistance;
+				bool intersects = b.Intersects(origin, dir, OUT candidateDistance);
+
+				if (intersects && bestDistance > candidateDistance) {
+					bestDistance = candidateDistance;
+					bestBox = b;
 				}
 
 			}
 
 		}
-		return bestDist;
+		out.distance = bestDistance;
+		out.solidColor = { 1.f, 1.f, 1.f, DEBUG_FLOOR ? 0.5f : 1.f };
+		out.side = whichSideWasHit(origin, dir, bestBox, out.distance);
 	}
 	//v ABGR
 	uint32_t sampleFloor(float x, float y) const {
@@ -483,24 +518,58 @@ public:
 		return HscrH<float>() + int(-pitch * HscrH<float>()) - 1; //< from -1 to (scene->ScrH - 1)
 	}
 
-	//v height in world units
-	void drawWall(float x, float dist, float height, float color) {
+	/// \param height in world units. \param color [0..1]
+	void drawWall(float x, float dist, float height, const D2D1::ColorF& color) {
 		const float& FOCAL_LENGTH = HscrH<float>();
 		float pixHeight = (FOCAL_LENGTH * height) / dist;
-		brush->SetColor(D2D1::ColorF(color, color, color, DEBUG_FLOOR ? 0.5f : 1.f));
+		brush->SetColor(color);
 		float pixBottom = getHorizon(scene->camera.pitch) + (FOCAL_LENGTH * (scene->camera.camHeight)) / dist;
 		pLowResRenderTarget->DrawLine(D2D1_POINT_2F(x, pixBottom), D2D1_POINT_2F(x, pixBottom - pixHeight), brush.Get(), 1.f);
 	}
 
+	float sampleWall() {
+
+	}
+
 	void drawWalls() {
-		float dist;
 		XMVECTOR dir;
+		IntersectionData intersection;
 		for (int x = 0; x < viewportWidth; ++x) {
 			float fixPersp = getPixelDir(x, OUT dir);
-			dist = intersect(scene->camera.position, dir);
-			dist = std::clamp(dist, 0.f, MAXVIEWDIST);
-			float color = -(dist / MAXVIEWDIST) + 1.f;
-			drawWall(x, dist * fixPersp, 1.f, color);
+			intersect(scene->camera.position, dir, OUT intersection);
+
+			// correct shade based on distance:
+			intersection.distance = std::clamp(intersection.distance, 0.f, MAXVIEWDIST);
+
+			auto& c = intersection.solidColor;
+			XMVECTOR colorVector = XMVectorSet(c.r, c.g, c.b, c.a);
+			XMVECTOR maxDistanceColorVector = XMVectorSet(
+				c.r - 0.4f,
+				c.g - 0.4f,
+				c.b - 0.4f,
+				c.a
+			);
+
+			float t = intersection.distance / MAXVIEWDIST;
+			XMVECTOR shadeVector = XMVectorLerp(colorVector, maxDistanceColorVector, t);
+
+			// correct shade based on wall side (normal direction)
+			if (intersection.side == IntersectionData::NORTH_SOUTH) {
+				shadeVector += XMVECTOR{ -0.15, -0.15, -0.15, 0 };
+			}
+
+			// clamp
+			shadeVector = XMVectorClamp(shadeVector, { 0.f, 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f, 1.f });
+
+			// draw wall:
+			D2D1::ColorF shade{
+				XMVectorGetX(shadeVector),
+				XMVectorGetY(shadeVector),
+				XMVectorGetZ(shadeVector),
+				XMVectorGetW(shadeVector)
+			};
+
+			drawWall(x, intersection.distance * fixPersp, 1.f, shade);
 		}
 
 	}
@@ -883,7 +952,7 @@ private:
 	ComPtr<ID2D1Bitmap> pFloorGPUBitmap; // in initDrawBuffer
 	std::vector<uint32_t> drawBuffer;  // in initDrawBuffer
 	CPUBitmap floorCPUTex;
-	float MAXVIEWDIST = 90.f;
+	float MAXVIEWDIST = 40.f;
 	GameplayState const* gameplayState;
 
 };
