@@ -109,6 +109,10 @@ inline void cppBenchPrint() {
 }
 // ^Bench
 
+/*****************************************************
+**** BITS
+******************************************************/
+
 inline uint32_t swapEndian(uint32_t val) {
 	return ((val >> 24) & 0xff) |
 		((val << 8) & 0xff0000) |
@@ -148,6 +152,10 @@ inline void enableFpExcept() {
 	_controlfp_s(&current, current & ~(_EM_INVALID | _EM_ZERODIVIDE | _EM_OVERFLOW), _MCW_EM);
 #endif
 }
+
+/********************************************************
+**** RANDOM
+*******************************/
 
 template <typename Iterator>
 inline void randSeq(Iterator begin, Iterator end, std::iter_value_t<Iterator> rMin = 0, std::iter_value_t<Iterator> rMax = 1) {
@@ -205,6 +213,64 @@ struct Traceable {
 		//std::cout << msg << std::endl;
 	}
 };
+
+/*************************************
+**** BITMASK FLAGS (ENUMS)
+*************************************/
+/// Usage (how to opt-in for your enum):
+/// template<> struct bitmask_enabled<MyFlags> : std::true_type { };
+/// do not forget to default-init enum values!
+
+#include <type_traits>
+#include <concepts>
+
+// 1) A trait you specialize to opt your enum into bitmask ops:
+template<typename E>
+struct bitmask_enabled : std::false_type {};
+
+// 2) A concept that checks its an enum and that youve opted it in:
+template<typename E>
+concept BitmaskEnum = std::is_enum_v<E> && bitmask_enabled<E>::value;
+
+// 3) Helper to get the underlying integer:
+template<BitmaskEnum E>
+constexpr auto to_underlying(E e) noexcept {
+    return static_cast<std::underlying_type_t<E>>(e);
+}
+
+// 4) Define all the usual bitwise operators:
+template<BitmaskEnum E>
+constexpr E operator|(E lhs, E rhs) noexcept {
+    return static_cast<E>(to_underlying(lhs) | to_underlying(rhs));
+}
+template<BitmaskEnum E>
+constexpr E operator&(E lhs, E rhs) noexcept {
+    return static_cast<E>(to_underlying(lhs) & to_underlying(rhs));
+}
+template<BitmaskEnum E>
+constexpr E operator^(E lhs, E rhs) noexcept {
+    return static_cast<E>(to_underlying(lhs) ^ to_underlying(rhs));
+}
+template<BitmaskEnum E>
+constexpr E operator~(E v) noexcept {
+    return static_cast<E>(~to_underlying(v));
+}
+
+template<BitmaskEnum E>
+constexpr E& operator|=(E& lhs, E rhs) noexcept {
+    lhs = lhs | rhs; 
+    return lhs;
+}
+template<BitmaskEnum E>
+constexpr E& operator&=(E& lhs, E rhs) noexcept {
+    lhs = lhs & rhs;
+    return lhs;
+}
+template<BitmaskEnum E>
+constexpr E& operator^=(E& lhs, E rhs) noexcept {
+    lhs = lhs ^ rhs;
+    return lhs;
+}
 
 /*************************************
 **** ALGORITHMS
