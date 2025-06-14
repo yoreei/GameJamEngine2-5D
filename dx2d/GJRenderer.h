@@ -881,9 +881,9 @@ public:
 		float _y = 0.f;
 		//float perspective = 0; // 0 to 1
 
-		int y = std::clamp(getHorizon(scene->camera.pitch) + 1, 0, viewportHeight - 1);
+		uint32_t y = std::clamp<uint32_t>(getHorizon(scene->camera.pitch) + 1, 0U, viewportHeight - 1U);
 		for (; y < viewportHeight; ++y) {
-			float zAngle = std::atan2f(screenDist, y - getHorizon(scene->camera.pitch) - 1); // hor.angle of vision for pix y. 
+			float zAngle = std::atan2f(screenDist, toF(y - getHorizon(scene->camera.pitch) - 1)); // hor.angle of vision for pix y. 
 			float y_d = scene->camera.camHeight * std::tanf(zAngle); // distance along y-plane that scanline meets floor-plane
 
 			//v   opposite = tan(a) * adj
