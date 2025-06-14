@@ -13,12 +13,6 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Header Files\2d">
-      <UniqueIdentifier>{6238bdcc-3c7e-493c-a703-2ed6e98180c8}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Header Files\3d">
-      <UniqueIdentifier>{1251086c-5c21-46dd-801c-621468d6ff08}</UniqueIdentifier>
-    </Filter>
     <Filter Include="dlls">
       <UniqueIdentifier>{9b9a88ed-aa08-4314-ac3d-dcedfbba5dfd}</UniqueIdentifier>
     </Filter>
@@ -39,86 +33,20 @@
     <ClInclude Include="Animation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="2d\common2d.h">
-      <Filter>Header Files\2d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\aabb.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\bvh.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\camera.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\color.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\common3d.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\constant_medium.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\hittable.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\hittable_list.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\interval.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\material.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\onb.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\pdf.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\perlin.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\quad.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\ray.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\rtw_stb_image.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\sphere.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\texture.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
-    <ClInclude Include="3d\vec3.h">
-      <Filter>Header Files\3d</Filter>
-    </ClInclude>
     <ClInclude Include="GJRenderer.h">
       <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\irrklang\irrKlang.h">
-      <Filter>Header Files\includes</Filter>
     </ClInclude>
     <ClInclude Include="GJGlobals.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="stb_image.h">
-      <Filter>Header Files\includes</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\common\cppUtil.h">
-      <Filter>Header Files\includes</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\common\cpp3rdParty.h">
-      <Filter>Header Files\includes</Filter>
-    </ClInclude>
     <ClInclude Include="GameEngine.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\danny\cpp3rdParty.h">
+      <Filter>Header Files\includes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\danny\cppUtil.h">
+      <Filter>Header Files\includes</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

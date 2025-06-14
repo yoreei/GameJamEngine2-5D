@@ -15,7 +15,7 @@
 #include <d2d1.h>
 #include <tchar.h>
 #include "Resource.h"
-#include "common/cpp3rdParty.h"
+#include "danny/cpp3rdParty.h"
 
 #pragma comment(lib, "d2d1.lib")
 

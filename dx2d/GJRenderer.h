@@ -16,7 +16,7 @@
 #include <wrl/client.h>
 #include <wincodec.h>
 
-#include "common/cppUtil.h"
+#include "danny/cppUtil.h"
 #include "GJScene.h"
 
 #define FMT_UNICODE 0 //https://github.com/gabime/spdlog/issues/3251

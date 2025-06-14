@@ -11,7 +11,6 @@
 #include <DirectXMath.h>
 
 #include "Animation.h"
-#include "3d/common3d.h"
 
 using namespace DirectX;
 
