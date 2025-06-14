@@ -13,14 +13,8 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="dlls">
-      <UniqueIdentifier>{9b9a88ed-aa08-4314-ac3d-dcedfbba5dfd}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Header Files\includes">
       <UniqueIdentifier>{3be830b2-9282-412e-88ea-2cfb6ba0d7d8}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Header Files\copyToOut">
-      <UniqueIdentifier>{ef3457fb-3259-42ff-806b-7327f433a81a}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -66,31 +60,5 @@
     <Image Include="dx2d.ico">
       <Filter>Resource Files</Filter>
     </Image>
-  </ItemGroup>
-  <ItemGroup>
-    <CopyFileToFolders Include="..\libs\irrklang\ikpMP3.dll">
-      <Filter>dlls</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="..\libs\irrklang\ikpFlac.dll">
-      <Filter>dlls</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="..\libs\irrklang\irrKlang.dll">
-      <Filter>dlls</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="..\assets\mainmenu.mp3">
-      <Filter>Header Files\copyToOut</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="..\assets\ingame.mp3">
-      <Filter>Header Files\copyToOut</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="..\assets\qLeap.png">
-      <Filter>Header Files\copyToOut</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="..\assets\explode.png">
-      <Filter>Header Files\copyToOut</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="..\assets\map1.txt">
-      <Filter>Header Files\copyToOut</Filter>
-    </CopyFileToFolders>
   </ItemGroup>
 </Project>
