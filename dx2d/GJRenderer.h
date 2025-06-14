@@ -467,7 +467,7 @@ public:
 	}
 	//v ABGR
 	uint32_t sampleFloor(float x, float y) const {
-		uint8_t c = int(std::floor(x)) + int(std::floor(y));
+		uint8_t c = toU8(std::floor(x)) + toU8(std::floor(y));
 		c %= 2;
 		c *= 255;
 
@@ -513,7 +513,7 @@ public:
 	}
 
 	int getHorizon(float pitch) {
-		return HscrH<float>() + int(-pitch * HscrH<float>()) - 1; //< from -1 to (scene->ScrH - 1)
+		return HscrH<int>() + int(-pitch * HscrH<float>()) - 1; //< from -1 to (scene->ScrH - 1)
 	}
 
 	/// \param height in world units. \param color [0..1]
