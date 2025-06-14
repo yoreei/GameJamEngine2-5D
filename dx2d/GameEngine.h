@@ -291,7 +291,7 @@ public:
 
 	}
 
-	void tickEvents(Seconds delta) {
+	void tickEvents(Seconds UNUSED(delta)) {
 
 		if (eventQueue.size() == 0) { return; }
 		auto& tup = eventQueue.back();
@@ -356,7 +356,7 @@ public:
 		globalSizeFactor += add;
 	}
 
-	void tickStats(Seconds delta) {
+	void tickStats(Seconds UNUSED(delta)) {
 		if (GGameTime - lastPointsTime > pointsCdSeconds) {
 			lastPointsTime = GGameTime;
 			gameplayState.points += 100;
@@ -388,7 +388,7 @@ public:
 		gameplayState.hiScore = prevHiScore;
 		if (gameplayState.points > prevHiScore) {
 			enterWIN();
-			writeHiScore(gameplayState.points);
+			writeHiScore();
 		}
 		else {
 			enterLOSS();
@@ -410,9 +410,9 @@ public:
 		while (!unique) {
 
 			int side = sideDistr(GEN);
-			double pos = static_cast<double>(posDistr(GEN));
+			float pos = toF(posDistr(GEN));
 			if (side == 0) { // top
-				XMVECTOR newPos{ pos, 0, 0 };
+				XMVECTOR newPos{ pos, 0.f, 0.f };
 				obstacles[id].position = newPos;
 			}
 			else if (side == 1) { // right
@@ -474,7 +474,7 @@ public:
 		return toInt;
 	}
 
-	void writeHiScore(uint64_t score) {
+	void writeHiScore() {
 		try {
 			std::ofstream ofs(hiScoreFile, std::ofstream::out);
 			ofs << std::to_string(gameplayState.points);
@@ -494,7 +494,7 @@ public:
 		rendererScene = scene; // full copy
 	}
 
-	void tickMovement(Seconds delta) {
+	void tickMovement(Seconds UNUSED(delta)) {
 		//if (!scene.qLeapActive) {
 		//	for (int i = 0; i < scene.entities.size(); ++i) {
 		//		Entity& e = scene.entities[i];
@@ -518,7 +518,7 @@ public:
 		//}
 	}
 
-	void tickCollision(Seconds delta) {
+	void tickCollision(Seconds UNUSED(delta)) {
 		//for (int i = 0; i < scene.obstacles.size(); ++i) {
 		//	Entity& o1 = scene.obstacles[i];
 		//	if (o1.health <= 0) {

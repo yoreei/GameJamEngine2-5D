@@ -38,6 +38,21 @@ inline constexpr bool DEBUG = false;
 
 
 /************************************
+**** CONVERSIONS
+************************************/
+
+#define UNUSED(param)
+#define toU8(x) static_cast<uint8_t>(x)
+#define toU32(x) static_cast<uint32_t>(x)
+#define toF(x) static_cast<float>(x)
+
+/************************************
+**** CONSTANTS
+************************************/
+
+constexpr float fPi = 3.141592653589793f;
+
+/************************************
 **** TIME
 ************************************/
 
@@ -284,9 +299,8 @@ constexpr E& operator^=(E& lhs, E rhs) noexcept {
 */
 inline bool nextPermute(std::vector<int>& in, std::vector<int>& out) {
 
-	int n = in.size();
-	int k = out.size();
-	for (int i = 0; i < k; i++)
+	size_t k = out.size();
+	for (size_t i = 0; i < k; i++)
 	{
 		out[i] = in[i];
 	}

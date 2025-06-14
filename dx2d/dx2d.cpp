@@ -170,7 +170,7 @@ int WINAPI wWinMain(
 			GGameEnginePtr->tick(deltaTime);
 		}
 
-		const float alpha = accumulator / deltaTime;
+		const float alpha = toF(accumulator / deltaTime);
 		GGameEnginePtr->draw(alpha);
 	}
 

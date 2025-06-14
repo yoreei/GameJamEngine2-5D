@@ -84,12 +84,12 @@ struct Entity {
 		}
 	}
 public:
-	//v * Non-Interpolatable:
-	uint16_t health = 1;
-	//v * Interpolatable:
-	uint16_t size = 2;
 	XMVECTOR momentum{};
 	XMVECTOR position{};
+	//v * Interpolatable:
+	float size = 2.f;
+	//v * Non-Interpolatable:
+	uint16_t health = 1;
 };
 
 struct GJScene {
@@ -171,7 +171,7 @@ public:
 		float pitch = 0; //< radians. We keep pitch out of `directionVector` to not interfere with raycasting in 2D
 		//v radians
 		void setDirectionAngle(float _angle) {
-			directionAngle = std::fmodf(_angle, 2 * std::numbers::pi);
+			directionAngle = std::fmodf(_angle, 2 * fPi);
 			directionVector = XMVECTOR{ std::cosf(directionAngle), std::sinf(directionAngle), 0.f, 0.f };
 			spdlog::info("angle: {}, dirx: {}, diry: {}\n", directionAngle, XMVectorGetX(directionVector), XMVectorGetY(directionVector));
 		}
@@ -181,7 +181,7 @@ public:
 			return directionAngle;
 		}
 
-		void setDirectionVector(const XMVECTOR& newDir) {
+		void setDirectionVector(const XMVECTOR& UNUSED(newDir)) {
 			ASSERT_EXPR(false, "not implemented yet");
 		}
 
@@ -230,14 +230,14 @@ public:
 			pitch = c1.pitch * (1.f - alpha) + c2.pitch * alpha;
 		}
 	private:
+		// directionVector and directionAngle represent the same thing, we keep both for caching
+		XMVECTOR directionVector{ 0, -1, 0, 0 }; //< 2D normalized vector, representing angle
 		float fov; //< radians
 		float vfov; //< radians
 
 		// image plane is 1 unit wide and distance to camera is controlled via setFov()
 		float imagePlaneDistance;
 
-		// directionVector and directionAngle represent the same thing, we keep both for caching
-		XMVECTOR directionVector{ 0, -1, 0, 0 }; //< 2D normalized vector, representing angle
 		float directionAngle; //< radians
 
 	} camera;
