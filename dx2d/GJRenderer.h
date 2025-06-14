@@ -512,8 +512,9 @@ public:
 		return T(viewportWidth) / T(2);
 	}
 
+	// \return Could be negative
 	int getHorizon(float pitch) {
-		return HscrH<int>() + int(-pitch * HscrH<float>()) - 1; //< from -1 to (scene->ScrH - 1)
+		return HscrH<int>() + int(-pitch * HscrH<float>()) - 1;
 	}
 
 	/// \param height in world units. \param color [0..1]
@@ -881,7 +882,7 @@ public:
 		float _y = 0.f;
 		//float perspective = 0; // 0 to 1
 
-		uint32_t y = std::clamp<uint32_t>(getHorizon(scene->camera.pitch) + 1, 0U, viewportHeight - 1U);
+		int y = std::clamp<int>(getHorizon(scene->camera.pitch) + 1, 0, viewportHeight - 1);
 		for (; y < viewportHeight; ++y) {
 			float zAngle = std::atan2f(screenDist, toF(y - getHorizon(scene->camera.pitch) - 1)); // hor.angle of vision for pix y. 
 			float y_d = scene->camera.camHeight * std::tanf(zAngle); // distance along y-plane that scanline meets floor-plane
