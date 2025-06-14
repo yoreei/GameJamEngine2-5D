@@ -23,8 +23,6 @@
 #include "spdlog/spdlog.h"
 
 using Microsoft::WRL::ComPtr;
-constexpr float PI = std::numbers::pi;
-
 constexpr bool DEBUG_FLOOR = false;
 
 constexpr size_t toId(auto someEnum) {
@@ -117,7 +115,7 @@ public:
 
 		// Create a compatible render target for low-res drawing
 		hr = pRenderTarget->CreateCompatibleRenderTarget(
-			D2D1::SizeF(viewportWidth, viewportHeight),
+			D2D1::SizeF(toF(viewportWidth), toF(viewportHeight)),
 			pLowResRenderTarget.GetAddressOf()
 		);
 		checkFailed(hr, hWnd, "createCompatibleRenderTarget failed");
@@ -245,7 +243,7 @@ public:
 		hr = textFormats[static_cast<size_t>(TextFormat::SMALL)]->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
 
 
-		if (static_cast<size_t>(TextFormat::size) != 3) {
+		if constexpr (static_cast<size_t>(TextFormat::size) != 3) {
 			MessageBox(NULL, L"update textformat", L"Error", MB_OK);
 			exit(-1);
 		}
@@ -258,7 +256,7 @@ public:
 		drawCallTable[static_cast<size_t>(State::WIN)] = &GJRenderer::drawWIN;
 		drawCallTable[static_cast<size_t>(State::MAINMENU)] = &GJRenderer::drawMAINMENU;
 		drawCallTable[static_cast<size_t>(State::PAUSED)] = &GJRenderer::drawPAUSED;
-		if (static_cast<uint32_t>(State::size) != 6) {
+		if constexpr (static_cast<uint32_t>(State::size) != 6) {
 			throw std::runtime_error("update state handling in renderer\n");
 		}
 
@@ -357,7 +355,7 @@ public:
 		std::wstring instructions = L"You are an electron, running along the path of least resistance. Do not hit the air bubbles!\n\n[Q],[W],[A],[S]: Quantum Scatter\n[Space] Quantum Leap\n";
 		pRenderTarget->DrawText(
 			instructions.c_str(),    // Text to render
-			wcslen(instructions.c_str()),
+			toU32(wcslen(instructions.c_str())),
 			textFormats[static_cast<size_t>(TextFormat::NORMAL)].Get(),            // Text format
 			D2D1::RectF(20, 20, 340, 340), // Layout rectangle
 			brushes["white"].Get()
@@ -367,8 +365,8 @@ public:
 
 	void drawMinimap() {
 		//draw minimap
-		int size = 2;
-		float minimapAlpha = 0.7;
+		float size = 2.f;
+		float minimapAlpha = 0.7f;
 		D2D1_RECT_F pos = D2D1::RectF(0, 0, 0, 0);
 		for (int y = 0; y < gameplayState->height; ++y) {
 			pos.top = y * size;
@@ -402,7 +400,7 @@ public:
 		pLowResRenderTarget->FillRectangle(pos, brush.Get());
 
 		//v Draw LOS
-		brush->SetColor(D2D1::ColorF{ 1.f, 1.f, 0.7, minimapAlpha });
+		brush->SetColor(D2D1::ColorF{ 1.f, 1.f, 0.7f, minimapAlpha });
 		XMVECTOR endV = posV + scene->camera.getDirectionVector() * 20;
 		const float end_x = XMVectorGetX(endV);
 		const float end_y = XMVectorGetY(endV); //< '-' because screen-space is inverted
@@ -612,7 +610,7 @@ public:
 		textFormats[toId(TextFormat::SMALL)]->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
 		pRenderTarget->DrawText(
 			wPoints.c_str(),    // Text to render
-			wcslen(wPoints.c_str()),
+			toU32(wcslen(wPoints.c_str())),
 			textFormats[toId(TextFormat::SMALL)].Get(),            // Text format
 			D2D1::RectF(0, 335, 345, 360), // Layout rectangle
 			brushes["white"].Get()
@@ -646,7 +644,7 @@ public:
 	void drawPaused() {
 		pLowResRenderTarget->DrawText(
 			L"Paused",    // Text to render
-			wcslen(L"Paused"),
+			toU32(wcslen(L"Paused")),
 			textFormats[static_cast<size_t>(TextFormat::HEADING)].Get(),            // Text format
 			D2D1::RectF(0, 40, 360, 180), // Layout rectangle
 			brushes["white"].Get()
@@ -655,7 +653,7 @@ public:
 		std::wstring t = L"[ESC] Resume\n[R] Reload\n[BSPACE] Quit";
 		pLowResRenderTarget->DrawText(
 			t.c_str(),    // Text to render
-			wcslen(t.c_str()),
+			toU32(wcslen(t.c_str())),
 			textFormats[static_cast<size_t>(TextFormat::NORMAL)].Get(),            // Text format
 			D2D1::RectF(0, 180, 320, 210), // Layout rectangle
 			brushes["white"].Get()
@@ -666,7 +664,7 @@ public:
 		std::wstring heading = std::format(L"{}\nHiScore: {}", text, gameplayState->hiScore);
 		pLowResRenderTarget->DrawText(
 			heading.c_str(),    // Text to render
-			wcslen(heading.c_str()),
+			toU32(wcslen(heading.c_str())),
 			textFormats[static_cast<size_t>(TextFormat::HEADING)].Get(),            // Text format
 			D2D1::RectF(0, 40, 360, 180), // Layout rectangle
 			brushes["white"].Get()
@@ -674,7 +672,7 @@ public:
 
 		pLowResRenderTarget->DrawText(
 			L"[R] Reload\n[BSPACE] Quit",    // Text to render
-			wcslen(L"[R] Reload\n[BSPACE] Quit"),
+			toU32(wcslen(L"[R] Reload\n[BSPACE] Quit")),
 			textFormats[static_cast<size_t>(TextFormat::NORMAL)].Get(),            // Text format
 			D2D1::RectF(0, 220, 320, 300), // Layout rectangle
 			brushes["white"].Get()
@@ -682,11 +680,11 @@ public:
 
 	}
 
-	void drawMenu(const std::string& text) {
+	void drawMenu(const std::string& UNUSED(text)) {
 		// todo
 		pLowResRenderTarget->DrawText(
 			L"Electric\nBubble\nBath!",    // Text to render
-			wcslen(L"Electric\nBubble\nBath!"),
+			toU32(wcslen(L"Electric\nBubble\nBath!")),
 			textFormats[static_cast<size_t>(TextFormat::HEADING)].Get(),            // Text format
 			D2D1::RectF(0, 40, 360, 180), // Layout rectangle
 			brushes["blue"].Get()
@@ -694,7 +692,7 @@ public:
 
 		pLowResRenderTarget->DrawText(
 			L"[ENTER] Game\n[BSPACE] Quit",    // Text to render
-			wcslen(L"[ENTER] Game\nF[BSPACE] Quit"),
+			toU32(wcslen(L"[ENTER] Game\nF[BSPACE] Quit")),
 			textFormats[static_cast<size_t>(TextFormat::NORMAL)].Get(),            // Text format
 			D2D1::RectF(0, 180, 320, 210), // Layout rectangle
 			brushes["blue"].Get()
