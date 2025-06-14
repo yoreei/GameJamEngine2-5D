@@ -827,7 +827,7 @@ public:
 
 		//float t_horizon = scene->zDir / scene->minZ;
 		//horizon = std::clamp(horizon, 0, viewportHeight - 1); //< todo delete?
-		int topBandHeight = 0.3f * float(viewportHeight);
+		float topBandHeight = 0.3f * viewportHeight;
 		int r_top = 200;
 		int g_top = 150;
 		int b_top = 150;
@@ -842,12 +842,13 @@ public:
 
 		// Compute the (non-integer) number of bands so that last band = 1 pixel:
 		float Nf = 1 + log(1.0f / topBandHeight) / log(f);
-		int N = std::ceil(Nf);
+		assert(Nf > 0.f);
+		uint32_t N = toU32(std::ceil(Nf));
 
-		int yPos = std::clamp(getHorizon(scene->camera.pitch), 0, viewportHeight - 1);
+		int yPos = std::clamp<int>(getHorizon(scene->camera.pitch), 0U, viewportHeight - 1U);
 		int bandHeight;
 		float bandHeightF;
-		for (int i = N; i >= 0 && yPos >= 0; --i)
+		for (uint32_t i = N; i >= 0 && yPos >= 0; --i)
 		{
 			// Compute this band's height (using the geometric progression)
 			bandHeightF = topBandHeight * std::pow(f, i);
@@ -862,11 +863,11 @@ public:
 			uint32_t color = (0xFF << 24) | (r << 16) | (g << 8) | b;
 
 			// Draw the horizontal band.
-			for (int y = int(yPos); y >= 0; --y)
+			for (int y = yPos; y >= 0; --y)
 			{
 				for (int x = 0; x < viewportWidth; ++x)
 				{
-					drawBuffer[y * viewportWidth + x] = color;
+					drawBuffer[size_t(y * viewportWidth + x)] = color;
 				}
 			}
 			yPos -= bandHeight;
